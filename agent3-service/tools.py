@@ -409,7 +409,7 @@ async def get_lsit_values(table: str, column: str) -> str:
         table = _validate_identifier(table)
 
         # Whitelist known tables from schema
-        if table.lower() not in domain[1]:
+        if table.lower() not in domain[3]:
             return {"error": f"Unknown table: {table}. use one of the tables in the schema only {domain[3]}"}
 
         if column not in str(schema[table.lower()]):
