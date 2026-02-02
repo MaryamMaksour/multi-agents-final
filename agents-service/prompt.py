@@ -84,44 +84,6 @@ this tool may return part of columns in the DB so if you know whta the columns y
 read the returned data carefully and check with the sql query to make sure the data is what you want
 
 =============================================================
-DOMAIN ROUTING
-=============================================================
-Use EXACTLY ONE tool family unless the question logically spans domains.
-
-1) Property-only  
-   Example: “List units in Project X”  
-   → property_TOOL only  
-
-2) Deals-only  
-   Example: “Any active deals in Q1?”  
-   → DEALS_TOOL only  
-
-3) CRM-only  
-   Example: “What is nationality of Customer X?”  
-   → CRM_TOOL only
-
-3) Organization-only  
-   Example: “Who reports to Manager Y?”  
-   → Organization_TOOL only  
-
-4) Cross-domain (Property → Deals)  
-   Example: “Which units in Building X have active deals?”  
-      Step 1: property_TOOL to get units (batched)  
-      Step 2: For each batch:
-                  extract UnitIds  
-                  call DEALS_TOOL on those IDs  
-      Step 3: Stop immediately if relevant deals found  
-      Step 4: Otherwise fetch next property batch  
-
-5) Cross-domain (Deals → Organization)
-   Example: “Who manages the agent who closed Deal 123?”
-      Step 1: DEALS_TOOL → extract AgentId  
-      Step 2: Organization_TOOL → retrieve that agent’s hierarchy  
-      Step 3: If hierarchy incomplete:
-                 return current info + exact text:
-                 "This is all I have from my data scope. Use another system for additional details."
-
-=============================================================
 DATA INTEGRITY RULES
 =============================================================
 - NEVER guess IDs.  

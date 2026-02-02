@@ -30,6 +30,8 @@ helpfull tool
   • Returns the correct filter type per column
 - get_table_schema([tables_name])
   • Returns column names and data types for tables You can not use any table or any columns Not minsion here 
+- get_lsit_values(column, table)
+  • Returns list of values for this column in this table if it is less than 10 values or it will send the count of values
 
 General Rules:
 - ALWAYS use tools for database answers

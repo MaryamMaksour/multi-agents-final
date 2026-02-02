@@ -243,6 +243,8 @@ async def db_execute(   query: str,
         if "offset $" not in query:
             return f"error offset $n should be in the query in this shape"
         
+        if params[-2] > 6:
+            return f"error, limit should be less than 6"
         
         resolved_params = []
         for p in params:
@@ -345,7 +347,9 @@ async def get_filter(columns: List[str], table_name) -> List[str]:
         filters = []
         for column in columns:
             res = ""
-            if column in semantic_search_list[table_name]:
+            if column not in str(schema[table_name.lower()]):
+                res = f"Unknown column: {column}. use one of the column in the table {table_name} schema only "
+            elif column in semantic_search_list[table_name]:
                 res = f" vector filters search for column {column} in table {table_name}. "
             elif column in word_search_list[table_name]:
                 res = f" ILIKE filters search for column {column} in table {table_name}. "
@@ -386,3 +390,44 @@ async def get_table_schema(tables: List[str]) -> Dict[str, Dict[str, Any]]:
         return results
     except Exception as e:
         return {"error": {"error while trying to get tables schema": e}}
+    
+@tool
+async def get_lsit_values(table: str, column: str) -> str:
+
+    """
+    input table and column name to get the list of value in this column
+
+    if it is more than 10 will return we have multy value + it is length
+    else will return in column {column name} in table {table} we have this list
+
+    """
+    try:
+
+        sql = f""" select DISTINCT {column} from {table} """
+        table = _validate_identifier(table)
+
+        # Whitelist known tables from schema
+        if table.lower() not in domain[1]:
+            return {"error": f"Unknown table: {table}. use one of the tables in the schema only {domain[2]}"}
+
+        if column not in str(schema[table.lower()]):
+            return {"error": f"Unknown column: {column}. use one of the column in the table {table} schema only "}
+
+
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            try:
+                rows = await conn.fetch(sql)
+                values = [r[column] for r in rows]
+                if len(values) > 10:
+                    return f" we have multy value {len(values)} "
+                
+                return f"in column {column} in table {table} we have this list {values}"
+            
+            except Exception as e:
+                logger.exception("Semantic search failed")
+                return {"error": f"SQL error: {str(e)}"}
+    
+    except Exception as e:
+        return {"error": {"error while trying to get tables schema": e}}
+

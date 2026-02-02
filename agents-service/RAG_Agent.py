@@ -10,15 +10,21 @@ from typing import TypedDict, Annotated, Sequence, Dict, Any
 from operator import add as add_messages
 
 from langgraph.graph import StateGraph, END
-from langchain_core.messages import BaseMessage, SystemMessage, ToolMessage
+from langchain_core.messages import BaseMessage, SystemMessage, ToolMessage, HumanMessage
 
 from main.llm import get_llm
 from .agent_tools import get_tools, get_tools_dict
 from .prompt import system_prompt
-from main.history_repo import log_tool_call
+from main.history_repo import log_tool_call, get_memory
 from main.config import MAX_PAGES_PER_TOOL   
 
 logger = logging.getLogger(__name__)
+
+def _last_user_text(state: AgentState) -> str:
+    for msg in reversed(state["messages"]):
+        if isinstance(msg, HumanMessage):
+            return str(msg.content)
+    return " ".join(str(getattr(m, "content", "")) for m in state["messages"])
 
 # ============================================================
 # LLM + Tools
@@ -53,9 +59,40 @@ def should_continue(state: AgentState) -> bool:
 # ============================================================
 
 async def call_llm(state: AgentState) -> AgentState:
-    messages = [SystemMessage(content=system_prompt)] + list(state["messages"])
+    system_prompt_new = system_prompt
+    # do semantic search
+    query_text = _last_user_text(state)
+    if not state.get("did_memory_enrichment", False):
+
+        try:
+            if query_text:
+                examples = []
+                semantic_results = await get_memory(query_text)
+                for res in semantic_results:
+                        #print(make_base_message(str(res)))
+                        examples.append(str(res))
+
+                if examples:
+                    '''print("_______________________________________________________")
+                    print("list(state['messages'])", query_text)
+                    print("_______________________________________________________")
+                    print("examples: ", examples)
+                    print("_______________________________________________________")'''
+                    system_prompt_new += " Some examples: " + str(examples)
+
+        
+        except Exception:
+                # Don't block the main request if memory lookup fails
+                logger.exception("get_memory failed; continuing without examples")
+                system_prompt_new = system_prompt
+
+
+    messages = [SystemMessage(content=str(system_prompt_new))] + list(state["messages"]) 
     response = await llm.ainvoke(messages)
-    return {"messages": [response]}
+    return {
+            "messages": [response],
+            "did_memory_enrichment": True,
+            }
 
 
 # ============================================================
@@ -115,7 +152,7 @@ async def _invoke_one_tool(call: Dict[str, Any], pagination: Dict[str, Any]) -> 
         try:
             print(f"[TOOL] Calling {tool_name} with args: {args}")
             result = await tools_dict[tool_name].ainvoke(args)
-            #print(f"[TOOL RESULT] {tool_name}: {result}")
+            print(f"[TOOL RESULT] {tool_name}: {result}")
 
         except Exception as e:
             logger.exception("Tool failed: %s", tool_name)
