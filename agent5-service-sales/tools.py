@@ -48,8 +48,28 @@ _DISALLOWED = re.compile(
     r"\b(insert|update|delete|drop|alter|truncate|create|grant|revoke)\b",
     flags=re.IGNORECASE,
 )
+def _ensure_No_embed_in_select(sql: str) :
 
-def _ensure_select_only(sql: str) -> None:
+    s = str(sql).lower()
+    s = (s or "").strip()
+
+    for i in range (len(s.split())):
+        if s[i] == "select":
+            while s[i] != 'from':
+                i += 1
+
+                if s[i].find("embed"):
+                    return ValueError("can not select embed column")
+                
+    return sql
+
+
+
+
+
+
+
+def _ensure_select_only(sql: str) :
     s = str(sql)
     s = (s or "").strip()
     if not s:
@@ -61,8 +81,10 @@ def _ensure_select_only(sql: str) -> None:
     if ";" in low:
         # prevent stacked statements
         result += "Semicolons are not allowed. re-run the tool without ; ."
+
     if _DISALLOWED.search(low) or not (low.startswith("select") or low.startswith("with")):#
         result += "Only SELECT/WITH queries are allowed. rerun the tool using only select/with."
+
     if "*" in low and (not "count" in low):
         result += "select * Not allowed list only columns needed or use column row_txt insted and re-run the tool."
 
@@ -79,20 +101,6 @@ def _ensure_select_only(sql: str) -> None:
       
     return sql
 
-def _ensure_No_embed_in_select(sql: str) :
-
-    s = str(sql).lower()
-    s = (s or "").strip()
-
-    for i in range (len(s.split())):
-        if s[i] == "select":
-            while s[i] != 'from':
-                i += 1
-
-                if s[i].find("embed"):
-                    return ValueError("can not select embed column")
-                
-    return sql
 
 
 def _validate_identifier(name: str) -> str:
@@ -121,8 +129,8 @@ async def _semantic_table_records(
     table = _validate_identifier(table)
 
     # Whitelist known tables from schema
-    if table.lower() not in domain[1]:
-        return {"error": f"Unknown table: {table}. use one of the tables in the schema only {domain[1]}"}
+    if table.lower() not in domain[5]:
+        return {"error": f"Unknown table: {table}. use one of the tables in the schema only {domain[5]}"}
 
     # embed_query expected to return a vector-like structure (list[float] etc.)
     try:
@@ -130,7 +138,6 @@ async def _semantic_table_records(
     except Exception as e:
         return {"error": f" error with embedding: {e}"}
     
-
     max_results = max(2, min(max_results, 10))
 
     sql = f"""
@@ -160,9 +167,7 @@ async def _semantic_table_records(
 async def get_table_records(query: str, table_name: str, mx: int = 5) -> Dict[str, Any]:
     """
     Semantic name resolution tool.
-    Use ONLY for vague, semantic, name-based lookups.
-     used it when other tools did not give You answer (secondry tool).
-
+    Use ONLY for vague, semantic, name-based lookups, or other tools did not give answer (secondry tool).
     Returns JSON ONLY.
     """
     table_name = table_name.lower()
@@ -170,8 +175,8 @@ async def get_table_records(query: str, table_name: str, mx: int = 5) -> Dict[st
         return {"error": "Invalid query."}
 
     table = (table_name or "").lower().strip()
-    if table not in domain[1]:
-        return {"error": f"Unknown table: {table_name}. use one of the tables in the schema only {domain[1]}"}
+    if table not in domain[5]:
+        return {"error": f"Unknown table: {table_name}. use one of the tables in the schema only {domain[5]}"}
 
     mx = max(3, min(int(mx), 6))
     return await _semantic_table_records(
@@ -239,6 +244,8 @@ async def db_execute(   query: str,
         if type(count_query) is not str :
             return f"error {count_query }"
         
+
+        
         query = query.lower()
         if "limit $" not in query:
             return f"error limit $n should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"
@@ -246,8 +253,12 @@ async def db_execute(   query: str,
         if "offset $" not in query:
             return f"error offset $n should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"
         
-        if int(params[-2]) > 6:
-            return f"error, limit should be less than 6"
+        if len(params) >= 2:
+            if int(params[-2]) > 100:
+                return f"error, limit should be less than 100"
+        else:
+            return f"error offset and limit should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"
+
         
         resolved_params = []
         for p in params:
@@ -258,7 +269,7 @@ async def db_execute(   query: str,
         resolved_count_params = []
         for p in count_params:
             if isinstance(p, str) and p.startswith("vec_"):
-                p = get_vector(p) 
+                p = get_vector(p)   
             resolved_count_params.append(p)
 
         pool = await get_pool()
@@ -345,15 +356,15 @@ async def get_filter(columns: List[str], table_name) -> List[str]:
     """
     try:
         table_name = table_name.lower()
-        if table_name not in domain[1]:
-                return f"{table_name} Not part of this agent, use other tables from {domain[1]}"
+        if table_name not in domain[5]:
+                return f"{table_name} Not part of this agent, use other tables from {domain[5]}"
         filters = []
         for column in columns:
             res = ""
             if column not in str(schema[table_name.lower()]):
                 res = f"Unknown column: {column}. use one of the column in the table {table_name} schema only "
             elif column in semantic_search_list[table_name]:
-                res = f" vector filters search for column {column} in table {table_name}. e.x.:   embed_{column} <=> $vector::vector < 0.35 "
+                res = f" vector filters search for column {column} in table {table_name}. e.x.: embed_{column}  <=> $vector::vector < 0.35 "
             elif column in word_search_list[table_name]:
                 res = f" ILIKE filters search for column {column} in table {table_name}. "
             elif column in operation_search_list[table_name]:
@@ -370,7 +381,6 @@ async def get_filter(columns: List[str], table_name) -> List[str]:
             filters.append(res)
             
         return filters
-    
     except Exception as e:
         return [f"erorr while getting filter type : {e}"]
  
@@ -385,16 +395,16 @@ async def get_table_schema(tables: List[str]) -> Dict[str, Dict[str, Any]]:
     try:
         results = []
         for table in tables:
-            if table.lower() not in domain[1]:
-                return f" {table} Not part of this agent, use other tables from  {domain[1]}. "
+            if table.lower() not in domain[5]:
+                return f" {table} Not part of this agent, use other tables from  {domain[5]}. "
             schm = str(schema[table.lower()]).replace("\\n", " ").replace("\\t", " ")
             results.append(f"schema for table {table.lower()} : {schm}")
 
         return results
+    
     except Exception as e:
         return {"error": {"error while trying to get tables schema": e}}
     
-
 @tool
 async def get_lsit_values(table: str, column: str) -> str:
 
@@ -411,8 +421,8 @@ async def get_lsit_values(table: str, column: str) -> str:
         table = _validate_identifier(table)
 
         # Whitelist known tables from schema
-        if table.lower() not in domain[1]:
-            return {"error": f"Unknown table: {table}. use one of the tables in the schema only {domain[1]}"}
+        if table.lower() not in domain[5]:
+            return {"error": f"Unknown table: {table}. use one of the tables in the schema only {domain[5]}"}
 
         if column not in str(schema[table.lower()]):
             return {"error": f"Unknown column: {column}. use one of the column in the table {table} schema only "}
@@ -422,12 +432,15 @@ async def get_lsit_values(table: str, column: str) -> str:
         async with pool.acquire() as conn:
             try:
                 rows = await conn.fetch(sql)
-                values = [r[column] for r in rows]
-                if len(values) > 15:
-                    return f" we have multy value {len(values)} "
+                if rows:
+                    values = [r[column] for r in rows]
+                    if len(values) > 10:
+                        return f" we have multy value {len(values)} "
+                    
+                    return f"in column {column} in table {table} we have this list {values}"
+                else:
+                    return f"all value in colmn {column} is Null"
                 
-                return f"in column {column} in table {table} we have this list {values}"
-            
             except Exception as e:
                 logger.exception("Semantic search failed")
                 return {"error": f"SQL error: {str(e)}"}
@@ -435,12 +448,3 @@ async def get_lsit_values(table: str, column: str) -> str:
     except Exception as e:
         return {"error": {"error while trying to get tables schema": e}}
 
-
-'''import asyncio
-
-def x():
-  
-    y = asyncio.run(get_lsit_values(column="status", table="buildings"))
-    print(y)
-
-x()'''

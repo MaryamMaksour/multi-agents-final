@@ -30,6 +30,7 @@ helpfull tool
   • Returns column names and data types for tables You can not use any table or any columns Not minsion here 
 - get_lsit_values(column, table)
   • Returns list of values for this column in this table if it is less than 10 values or it will send the count of values
+  • use it to make sure you using the value in the same way in the columns like sold or sold out, Expired or contract Expired, ...
 
 General Rules:
 - ALWAYS use tools for database answers
@@ -181,4 +182,5 @@ CLARIFICATION
 Ask ONE short question ONLY if SQL intent is ambiguous.
 Otherwise, proceed with tools.
 
+Never return NO DATA until you call at least 2 tools
 """

@@ -185,7 +185,7 @@ async def db_execute(   query: str,
                         offset: int,
                         count_query: str,
                         count_params: Sequence[Any],
-                        cursor: str ,
+                        cursor: Optional[str] = None ,
                         session_id: Optional[str] = None,  
                         turn_id: Optional[str] = None,
                      
@@ -239,12 +239,12 @@ async def db_execute(   query: str,
         
         query = query.lower()
         if "limit $" not in query:
-            return f"error limit $n should be in the query in this shape"
+            return f"error limit $n should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"
         
         if "offset $" not in query:
-            return f"error offset $n should be in the query in this shape"
+            return f"error offset $n should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"
         
-        if params[-2] > 6:
+        if int(params[-2]) > 6:
             return f"error, limit should be less than 6"
         
         resolved_params = []
@@ -351,7 +351,7 @@ async def get_filter(columns: List[str], table_name) -> List[str]:
             if column not in str(schema[table_name.lower()]):
                 res = f"Unknown column: {column}. use one of the column in the table {table_name} schema only "
             elif column in semantic_search_list[table_name]:
-                res = f" vector filters search for column {column} in table {table_name}. "
+                res = f" vector filters search for column {column} in table {table_name}. e.x.: embed_{column}  <=> $vector::vector < 0.35 "
             elif column in word_search_list[table_name]:
                 res = f" ILIKE filters search for column {column} in table {table_name}. "
             elif column in operation_search_list[table_name]:

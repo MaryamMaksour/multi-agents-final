@@ -10,9 +10,10 @@ from typing import Any, Dict, List
 
 domain = [ [],
            [ "developers", "projects", "buildings", "units" ],
-           [ "employees", "directors_employees", "hos_employee", "brokers", "teams", "agents_employee" ],
+           [ "employees", "directors_employees", "hos_employee", "teams", "agents_employee" ],
            [ "customers","customerrequesttrackers",  "customers_deals", ],
-           [ "deals", "deals_units", "deals_projects", "deals_customers", "deals_directors", "deals_agents"  ], ]
+           [ "deals", "deals_units", "deals_projects", "deals_customers", "deals_directors", "deals_agents"  ], 
+           ["bookings", "PaymentLinks", "projects", "buildings", "units", "employees", "agents_employee", "customers", "brokers" ]]
 
 
 SCHEMA: Dict[str, Dict[str, Any]] = {
@@ -271,7 +272,7 @@ SCHEMA: Dict[str, Dict[str, Any]] = {
     },
 
     "brokers": {
-        "domain": "organization",
+        "domain": "brokers-info",
         "columns": {
             "id": "int4",
             "name": "text",
@@ -411,6 +412,19 @@ SCHEMA: Dict[str, Dict[str, Any]] = {
             "rejectedreason": "text",
             "row_txt": "text",
             "embedding": "ev.vector",
+            "embed_fullnamear": "ev.vector",
+
+            "embed_fullnameen": "ev.vector",
+            "embed_city": "ev.vector",
+            "embed_companynamear": "ev.vector",
+            "embed_companynameen": "ev.vector",
+            "embed_country": "ev.vector",
+            "embed_nationality": "ev.vector",
+            "embed_operatorname": "ev.vector",
+            "embed_position": "ev.vector",
+            "embed_representativefullnamear": "ev.vector",
+            "embed_representativefullnameen": "ev.vector",
+            "embed_street": "ev.vector",
         },
     },
 
@@ -426,6 +440,10 @@ SCHEMA: Dict[str, Dict[str, Any]] = {
             "roleid": "text",
             "rolename": "text",
             "status": "text",
+            "embedding": "ev.vector",
+            "embed_label": "ev.vector",
+            "embed_rolename": "ev.vector",
+            "embed_status": "ev.vector",
         },      
     },
 
@@ -450,6 +468,13 @@ SCHEMA: Dict[str, Dict[str, Any]] = {
             "country": "text",
             "row_txt": "text",
             "embedding": "ev.vector",
+            
+"embed_name": "ev.vector",
+
+"embed_projectname": "ev.vector",
+"embed_accountmanagername": "ev.vector",
+"embed_contactname": "ev.vector",
+"embed_agentfreelancername": "ev.vector",
         },
 
     },
@@ -473,7 +498,9 @@ SCHEMA: Dict[str, Dict[str, Any]] = {
             "country": "text",
             "row_txt": "text",
             "embedding": "ev.vector",
-            # add embed_* here if available in your DB
+            "embed_name": "ev.vector",
+            "embed_projectname": "ev.vector",
+            "embed_accountmanagername": "ev.vector",
         },
         
     },
@@ -623,6 +650,11 @@ SCHEMA: Dict[str, Dict[str, Any]] = {
             "rejectedreason": "text",
             "row_txt": "text",
             "embedding": "ev.vector",
+            "embed_name": "ev.vector",
+            "embed_projectname": "ev.vector",
+            "embed_accountmanagername": "ev.vector",
+            "embed_contactname": "ev.vector",
+            "embed_agentfreelancername": "ev.vector",
         
     },
     },
@@ -717,6 +749,57 @@ SCHEMA: Dict[str, Dict[str, Any]] = {
         },
         
     } ,
+
+    "bookings": {
+            "domain": "sales",
+        "columns":{
+            "Id": "int",
+            "UnitId": "int",
+            "OriginalPrice": "float",
+            "AgreedPrice": "float",
+            "TransferredToDeal": "bool",
+             "CustomerId": "int",
+            "ProjectId": "int",
+            "Stage": "text",
+            "AgentId": "int",
+            "ManagerId": "int",
+            "HeadOfSalesId": "int",
+            "CSOId": "int",
+            "Layout": "text",
+            "BrokerId": "int",
+            "CreatedBy": "text",
+            "CreationDate": "text",
+            "IsDeleted": "bool",
+            "PaymentLinkId": "int",
+            "BookingReferenceId": "text",
+            "DraftedAmount": "float",
+            "row_txt": "text",
+            "embedding": "ev.vector",
+        },
+    } ,
+
+    "PaymentLinks": {
+            "domain": "sales",
+        "columns":{
+            "Id": "int",
+    "Amount": "float",
+    "Currency": "text",
+    "PaymentType": "text",
+    "PaymentUrl": "text",
+    "Status": "text",
+    "ExpiryDate": "text",
+    "RefNo": "text",
+    "PaymentLinkReferenceId": "text",
+    "ProjectId": "int",
+    "AgentId": "int",
+    "CreatedBy": "text",
+    "CreationDate": "text",
+    "IsDeleted": "bool",
+    "IsSplited": "bool",
+    "RemainingAmount": "float",
+    "ServiceChargePercentage": "float"
+    } ,
+}
 }
 
 
@@ -726,7 +809,7 @@ word_search_list: Dict[str, Dict[str, List[str]]] = {
         "developers": ["portalaccesstype"],
         "projects":   [ "status", "isavailabiletoportal"],
         "buildings":  ["availabilitystatus", "availab", "bedroom", "currency", "status", "isavailabiletoportal"],
-        "units":      ["availabilitystatus",  "currency", "baths", "bedroom" , "furnished", "kitchen",],
+        "units":      ["availabilitystatus",  "currency", "baths", "bedroom" , "furnished", "kitchen",   "type",],
         
         "employees": ["portalstatus", "status",  ],
         "directors_employees": ["director_portalstatus",  "director_status", "hos_portalstatus",    "hos_status"],
@@ -746,6 +829,9 @@ word_search_list: Dict[str, Dict[str, List[str]]] = {
         "deals_projects": [ "salesleadsource", "stage", "status", "isavailabiletoportal", ],     
         "deals_directors": ["director_portalstatus",   "director_status", "hos_portalstatus",   "hos_status"],
         "deals_agents":  ["portalstatus",  "status" ],
+
+        "bookings": ["Stage", "layout", "TransferredToDeal",  ],
+        "paymentlinks": ["paymenttype", "status", "currency" ],
 
 }
 
@@ -790,8 +876,14 @@ operation_search_list : Dict[str, Dict[str, List[str]]] = {
     "deals_directors": ["deal_id","director_id", "director_mobile", "director_empcode", "director_reportingmanagerid", 
                             "director_employmentdate", "director_sap",   "director_email",  "hos_email",
                             "hos_id", "hos_mobile", "hos_empcode", "hos_reportingmanagerid", "hos_employmentdate",],
-    
 
+
+    "bookings": ["id", "unitid",  "originalprice", "agreedprice", "customerid",
+										"projectid",  "agentid",  "managerid", "headofsalesid", "csoid",
+										"brokerid",  "createdby", "creationdate", "isdeleted", "paymentlinkid", "bookingreferenceid", "draftedamount"],
+    "paymentlinks": ["id", "amount", "payment_url", "expiry_date", "ref_no",  "payment_link_reference_id",
+                     "project_id", "agent_id", "created_by", "creation_date",
+										"is_deleted",  "is_splited", "remaining_amount", "service_charge_percentage"]
   }   
 
 # SEMANTIC SEARCH columns (MUST align to available embed_* columns)
@@ -801,7 +893,7 @@ semantic_search_list: Dict[str, Dict[str, List[str]]] = {
         "projects": [  "name", "shortname", "location", "bankaddress", "bankbranch", "bankname",
             "corporateaccountname", "corporatebankaddress", "corporatebankbranch",
             "corporatebankname", "escrowaccountname",  "address" ],
-        "units": [ "name", "shortname",  "furnished",  "description", "type", "view",  ],
+        "units": [ "name", "shortname",   "description",  "view",  ],
         "buildings": [ "name", "shortname", "location", "bankaddress", "bankbranch",
             "bankname", "escrowaccountname","address"  ],
                
@@ -836,5 +928,8 @@ semantic_search_list: Dict[str, Dict[str, List[str]]] = {
         "deals_agents":["name", "nationality", "address", "role", "position", "department", "section"],
         "deals_customers" :["fullnameen",  "fullnamear",  "nationality", "companynamear",  "companynameen",  "operatorname",
                             "position",  "deal_name",  "projectname", "accountmanagername", ],
+
+        "bookings" : [],
+        "paymentlinks": [],
 
 }

@@ -169,4 +169,6 @@ CLARIFICATION
 Ask ONE short question ONLY if SQL intent is ambiguous.
 Otherwise, proceed with tools.
 
+
+Never return NO DATA until you call at least 2 tools
 """
