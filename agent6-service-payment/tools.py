@@ -129,8 +129,8 @@ async def _semantic_table_records(
     table = _validate_identifier(table)
 
     # Whitelist known tables from schema
-    if table.lower() not in domain[5]:
-        return {"error": f"Unknown table: {table}. use one of the tables in the schema only {domain[5]}"}
+    if table.lower() not in domain[6]:
+        return {"error": f"Unknown table: {table}. use one of the tables in the schema only {domain[6]}"}
 
     # embed_query expected to return a vector-like structure (list[float] etc.)
     try:
@@ -175,8 +175,8 @@ async def get_table_records(query: str, table_name: str, mx: int = 5) -> Dict[st
         return {"error": "Invalid query."}
 
     table = (table_name or "").lower().strip()
-    if table not in domain[5]:
-        return {"error": f"Unknown table: {table_name}. use one of the tables in the schema only {domain[5]}"}
+    if table not in domain[6]:
+        return {"error": f"Unknown table: {table_name}. use one of the tables in the schema only {domain[6]}"}
 
     mx = max(3, min(int(mx), 6))
     return await _semantic_table_records(
@@ -356,8 +356,8 @@ async def get_filter(columns: List[str], table_name) -> List[str]:
     """
     try:
         table_name = table_name.lower()
-        if table_name not in domain[5]:
-                return f"{table_name} Not part of this agent, use other tables from {domain[5]}"
+        if table_name not in domain[6]:
+                return f"{table_name} Not part of this agent, use other tables from {domain[6]}"
         filters = []
         for column in columns:
             res = ""
@@ -395,8 +395,8 @@ async def get_table_schema(tables: List[str]) -> Dict[str, Dict[str, Any]]:
     try:
         results = []
         for table in tables:
-            if table.lower() not in domain[5]:
-                return f" {table} Not part of this agent, use other tables from  {domain[5]}. "
+            if table.lower() not in domain[6]:
+                return f" {table} Not part of this agent, use other tables from  {domain[6]}. "
             schm = str(schema[table.lower()]).replace("\\n", " ").replace("\\t", " ")
             results.append(f"schema for table {table.lower()} : {schm}")
 
@@ -421,8 +421,8 @@ async def get_lsit_values(table: str, column: str) -> str:
         table = _validate_identifier(table)
 
         # Whitelist known tables from schema
-        if table.lower() not in domain[5]:
-            return {"error": f"Unknown table: {table}. use one of the tables in the schema only {domain[5]}"}
+        if table.lower() not in domain[6]:
+            return {"error": f"Unknown table: {table}. use one of the tables in the schema only {domain[6]}"}
 
         if column not in str(schema[table.lower()]):
             return {"error": f"Unknown column: {column}. use one of the column in the table {table} schema only "}

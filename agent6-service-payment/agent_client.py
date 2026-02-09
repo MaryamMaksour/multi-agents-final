@@ -6,7 +6,7 @@ import requests
 class AgentClient:
     
     def __init__(self, api_base: str | None = None, session_id: str | None = None, timeout: int = 60):
-        self.api_base = api_base or os.getenv("AGENT_API_BASE", "http://localhost:8006")
+        self.api_base = api_base or os.getenv("AGENT_API_BASE", "http://localhost:8007")
 
         self.chat_endpoint = f"{self.api_base}/chat"
         self.reset_endpoint = f"{self.api_base}/reset"

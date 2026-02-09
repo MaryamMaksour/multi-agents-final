@@ -13,7 +13,9 @@ domain = [ [],
            [ "employees", "directors_employees", "hos_employee", "teams", "agents_employee" ],
            [ "customers","customerrequesttrackers",  "customers_deals", ],
            [ "deals", "deals_units", "deals_projects", "deals_customers", "deals_directors", "deals_agents"  ], 
-           ["bookings", "PaymentLinks", "projects", "buildings", "units", "employees", "agents_employee", "customers", "brokers" ]]
+           ["bookings", "paymentlinks", "projects", "buildings", "units", "employees", "agents_employee", "customers", "brokers" ],
+           [ "paymentsplits", "payments", "paymentplandetails", "paymentlinks", "onlinepaymenttransactions", "installmentplans", "instalmentadjusted",
+              "paymenttermitems", "paymentterms", "projectpaymentplans", "projectpaymentterms" ]]
 
 
 SCHEMA: Dict[str, Dict[str, Any]] = {
@@ -778,7 +780,7 @@ SCHEMA: Dict[str, Dict[str, Any]] = {
         },
     } ,
 
-    "PaymentLinks": {
+    "paymentLinks": {
             "domain": "sales",
         "columns":{
             "Id": "int",
@@ -799,7 +801,275 @@ SCHEMA: Dict[str, Dict[str, Any]] = {
     "RemainingAmount": "float",
     "ServiceChargePercentage": "float"
     } ,
-}
+},
+
+
+  "payments": {
+            "domain": "payments",
+        "columns":{
+            
+    "Id": "int",
+    "PaymentReceiptDetailsName": "text",
+    "Status": "text",
+    "Amount": "int",
+    "Account": "text",
+    "PaymentMethod": "text",
+    "DateOfReceipt": "date",
+    "ChqDDTTNumber": "text",
+    "DateOfTransaction": "date",
+    "ChequeDepositDate": "date",
+    "ChequeReturnedDate": "date",
+    "DealId": "int",
+    "ReceivedByEVDate": "date",
+    "TransferredToDeveloperDate": "date",
+    "ReceivedDate": "date",
+    "POPReference": "int",
+    "isFormRequested": "bool",
+    "IsLoading": "bool",
+    "Currency": "text",
+    "CustomerId": "int",
+    "PaymentStatus": "text",
+    "CreatedBy": "text",
+    "CreationDate": "date",
+    "IsDeleted": "bool",
+    "embed_PaymentReceiptDetailsName": "ev.vector",
+    "embed_Status": "ev.vector",
+    "embed_Account": "ev.vector",
+    "embed_PaymentMethod": "ev.vector",
+    "embed_PaymentStatus": "ev.vector",
+    "row_txt": "text",
+    "embedding": "ev.vector"
+  }},
+  "installmentplans": {
+            "domain": "payments",
+        "columns":{
+    "Id": "int",
+    "Name": "text",
+    "Priority": "int",
+    "Percentage": "int",
+    "Amount": "int",
+    "DueDate": "date",
+    "PaymentDate": "date",
+    "Settled": "bool",
+    "Status": "text",
+    "PaidAmount": "int",
+    "RemainingAmount": "int",
+    "DealId": "int",
+    "AccountType": "text",
+    "CreatedBy": "text",
+    "CreationDate": "date",
+    "IsDeleted": "bool",
+    "embed_Name": "ev.vector",
+    "embed_Status": "ev.vector",
+    "embed_AccountType": "ev.vector",
+    "row_txt": "text",
+    "embedding": "ev.vector"
+  }},
+  "instalmentadjusted": {
+            "domain": "payments",
+        "columns":{
+    "Id": "int",
+    "InstalmentType": "text",
+    "Amount": "int",
+    "PaymentMethod": "text",
+    "PaymentId": "int",
+    "InstalmentPlanId": "int",
+    "AccountType": "text",
+    "Currency": "text",
+    "CreatedBy": "text",
+    "CreationDate": "date",
+    "IsDeleted": "bool",
+    "embed_InstalmentType": "ev.vector",
+    "embed_PaymentMethod": "ev.vector",
+    "embed_AccountType": "ev.vector",
+    "row_txt": "text",
+    "embedding": "ev.vector"
+  }},
+  "onlinepaymenttransactions": {
+            "domain": "payments",
+        "columns":{
+    "Id": "int",
+    "TransactionNumber": "int",
+    "Amount": "int",
+    "Status": "text",
+    "PaymentLink": "text",
+    "CreationDateTime": "date",
+    "BusinessEntityId": "int",
+    "BusinessEntityType": "int",
+    "embed_status": "ev.vector",
+    "row_txt": "text",
+    "embedding": "ev.vector"
+  }},
+  "paymentlinks": {
+            "domain": "payments",
+        "columns":{
+    "Id": "int",
+    "Amount": "int",
+    "Currency": "text",
+    "PaymentType": "text",
+    "PaymentUrl": "text",
+    "Status": "text",
+    "ExpiryDate": "date",
+    "RefNo": "text",
+    "PaymentLinkReferenceId": "int",
+    "ProjectId": "int",
+    "AgentId": "int",
+    "CreatedBy": "text",
+    "CreationDate": "date",
+    "IsDeleted": "bool",
+    "IsSplited": "bool",
+    "RemainingAmount": "int",
+    "ServiceChargePercentage": "int",
+    "embed_PaymentType": "ev.vector",
+    "embed_Status": "ev.vector",
+    "row_txt": "text",
+    "embedding": "ev.vector"
+  }},
+  "paymentplandetails": {
+            "domain": "payments",
+        "columns":{
+    "Id": "int",
+    "SalesProposalId": "int",
+    "EVInstalment": "text",
+    "DueDate": "date",
+    "Amount": "int",
+    "Percentage": "int",
+    "PaymentTermItemId": "int",
+    "CreatedBy": "text",
+    "CreationDate": "date",
+    "IsDeleted": "bool",
+    "embed_EVInstalment": "ev.vector",
+    "row_txt": "text",
+    "embedding": "ev.vector"
+  }},
+  "paymentsplits": {
+            "domain": "payments",
+        "columns":{
+    "Id": "int",
+    "PaymentLinkId": "int",
+    "Amount": "int",
+    "Status": "text",
+    "IsFullPaymentAmount": "bool",
+    "CreatedBy": "text",
+    "CreationDate": "date",
+    "IsDeleted": "bool",
+    "embed_Status": "ev.vector",
+    "row_txt": "text",
+    "embedding": "ev.vector"
+  }},
+  "paymentterms": {
+            "domain": "payments",
+        "columns":{
+    "Id": "int",
+    "PTID": "text",
+    "AdminFee": "int",
+    "DLDFee": "int",
+    "Name": "text",
+    "ExchangeRate": "int",
+    "Status": "bool",
+    "Currency": "text",
+    "BedType": "text",
+    "CreatedBy": "text",
+    "CreationDate": "date",
+    "IsDeleted": "bool",
+    "embed_Name": "ev.vector",
+    "embed_Status": "ev.vector",
+    "embed_BedType": "ev.vector",
+    "row_txt": "text",
+    "embedding": "ev.vector"
+  }},
+  "paymenttermitems": {
+            "domain": "payments",
+        "columns":{
+    "Id": "int",
+    "Name": "text",
+    "Gap": "int",
+    "Percentage": "int",
+    "DueDate": "date",
+    "PaymentTermId": "int",
+    "MilestoneGapType": "text",
+    "CreatedBy": "text",
+    "CreationDate": "date",
+    "IsDeleted": "bool",
+    "embed_Name": "ev.vector",
+    "embed_MilestoneGapType": "ev.vector",
+    "row_txt": "text",
+    "embedding": "ev.vector"
+  }},
+  "projectpaymentplans": {
+            "domain": "payments",
+        "columns":{
+    "Id": "int",
+    "ProjectId": "int",
+    "PaymentTermId": "int",
+    "CreatedBy": "text",
+    "CreationDate": "date",
+    "IsDeleted": "bool",
+    "row_txt": "text",
+    "embedding": "ev.vector"
+  }},
+  "projectpaymentterms": {
+            "domain": "payments",
+        "columns":{
+    "Id": "int",
+    "Layout": "text",
+    "ProjectId": "int",
+    "MinimumAmount": "decimal",
+    "embed_Layout": "ev.vector",
+    "row_txt": "text",
+    "embedding": "ev.vector"
+  }},
+  "projectpayment": {
+            "domain": "payments",
+        "columns":{
+    "Id": "int",
+    "ProjectId": "int",
+    "Layout": "text",
+    "MinimumAmount": "decimal",
+    "projectid": "int4",
+    "projectname": "text",
+    "projectshortname": "text",
+    "projectdeveloperid": "int4",
+    "projectaddress": "text",
+    "projectlocation": "text",
+    "projectstatus": "text",
+    "projectaccountnumber": "text",
+    "projectbankaddress": "text",
+    "projectbankbranch": "text",
+    "projectbankname": "text",
+    "projectadminfee": "text",
+    "projectcorporateaccountname": "text",
+    "projectcorporateaccountnumber": "text",
+    "projectcorporatebankaddress": "text",
+    "projectcorporatebankbranch": "text",
+    "projectcorporatebankname": "text",
+    "projectcorporateibannumber": "text",
+    "projectescrowaccountname": "text",
+    "projectibannumber": "text",
+    "projectcurrency": "text",
+    "projectisavailabiletoportal": "text",
+    "projectlatitude": "text",
+    "projectlongitude": "text",
+    "embed_projectname": "ev.vector",
+    "embed_projectshortname": "ev.vector",
+    "embed_projectlocation": "ev.vector",
+    "embed_projectbankaddress": "ev.vector",
+    "embed_projectbankbranch": "ev.vector",
+    "embed_projectbankname": "ev.vector",
+    "embed_projectcorporateaccountname": "ev.vector",
+    "embed_projectcorporatebankaddress": "ev.vector",
+    "embed_projectcorporatebankbranch": "ev.vector",
+    "embed_projectcorporatebankname": "ev.vector",
+    "embed_projectescrowaccountname": "ev.vector",
+    "embed_projectisavailabiletoportal": "ev.vector",
+    "embed_projectlatitude": "ev.vector",
+    "embed_projectlongitude": "ev.vector",
+    "CreatedBy": "text",
+    "CreationDate": "date",
+    "IsDeleted": "bool", 
+    "row_txt": "text",
+    "embedding": "ev.vector"
+  }}
 }
 
 
@@ -831,8 +1101,20 @@ word_search_list: Dict[str, Dict[str, List[str]]] = {
         "deals_agents":  ["portalstatus",  "status" ],
 
         "bookings": ["Stage", "layout", "TransferredToDeal",  ],
-        "paymentlinks": ["paymenttype", "status", "currency" ],
 
+        "paymentlinks": ["paymenttype", "status", "currency" ],
+        "paymentsplits":[ "status",], 
+        "payments":["paymentreceiptdetailsname", "status", "account", "paymentmethod", 
+                    "chqddttnumber",  "currency", "paymentstatus",   ], 
+
+        "paymentplandetails":[], 
+        "onlinepaymenttransactions":["status", "transactionnumber"], 
+        "installmentplans":["name", "status", "accounttype", ], 
+        "instalmentadjusted":["instalmenttype", "paymentmethod", "accounttype", ],
+        "paymenttermitems":["name", "milestonegaptype","duedate" ], 
+        "paymentterms":["name", "bedtype", "status", "currency"], 
+        "projectpaymentplans":[], 
+        "projectpaymentterms":["layout", ],
 }
 
 
@@ -863,7 +1145,7 @@ operation_search_list : Dict[str, Dict[str, List[str]]] = {
     "customers_deals" : [  "customer_id", "id", "directorid", "agentid", "unitid",   "street",],
     
 
-    "deals": ["id", "directorid", "agentid", "unitid", ],
+    "deals": ["id", "directorid", "agentid", "unitid", ], 
     "deals_units": ["deal_id",  "directorid", "agentid", "id", "buildingid",  "unitclusterid", "price_range",
                     "area", "price",  "pricepersqft",  "bookingdate","number","baths","floor", "salesoffer", "paymentmodel", "unitnumber",  ],
     "deals_projects": [  "id",  "directorid",  "agentid",  "unitid", "bookingdate", "bookingtype", "stage",
@@ -883,7 +1165,19 @@ operation_search_list : Dict[str, Dict[str, List[str]]] = {
 										"brokerid",  "createdby", "creationdate", "isdeleted", "paymentlinkid", "bookingreferenceid", "draftedamount"],
     "paymentlinks": ["id", "amount", "payment_url", "expiry_date", "ref_no",  "payment_link_reference_id",
                      "project_id", "agent_id", "created_by", "creation_date",
-										"is_deleted",  "is_splited", "remaining_amount", "service_charge_percentage"]
+										"is_deleted",  "is_splited", "remaining_amount", "service_charge_percentage"],
+    "paymentsplits":["id", "PaymentLinkId", "amount", "isfullpaymentamount", "creationdate", "createdby","isdeleted", ], 
+    "payments":["id", "amount", "dateofreceipt", "dateoftransaction", "chequedepositdate", "chequereturneddate",
+                    "receivedbyevdate", "transferredtodeveloperdate", "receiveddate", 
+                    "isformrequested", "isloading","customerid","creationdate", "createdby","isdeleted",  ],  
+        "paymentplandetails":["id", "salesproposalid", "duedate", "paymenttermitemid", "creationdate", "createdby","isdeleted", ], 
+        "onlinepaymenttransactions":["id", "creationdatetime", "businessentityid", "businessentitytype",   "amount"], 
+        "installmentplans":["id", "priority", "amount", "duedate", "paymentdate", "settled", "paidamount", "remainingamount", "dealid", "accounttype", "creationdate", "createdby","isdeleted", ], 
+        "instalmentadjusted":["id", "amount",   "paymentid", "instalmentplanid", "currency", "creationdate", "createdby","isdeleted", ],
+        "paymenttermitems":["id",  "gap", "percentage",   "paymenttermid"], 
+        "paymentterms":["id", "ptid", "adminfee", "dldfee", "exchangerate",   "creationdate", "createdby","isdeleted", ], 
+        "projectpaymentplans":["id", "projectid", "paymenttermid", "creationdate", "createdby","isdeleted", ], 
+        "projectpaymentterms":["id", "projectid", "minimumamount",   ],
   }   
 
 # SEMANTIC SEARCH columns (MUST align to available embed_* columns)
@@ -931,5 +1225,15 @@ semantic_search_list: Dict[str, Dict[str, List[str]]] = {
 
         "bookings" : [],
         "paymentlinks": [],
+        "paymentsplits":[], 
+        "payments":[], 
+        "paymentplandetails":["evinstalment"], 
+        "onlinepaymenttransactions":[], 
+        "installmentplans":[], 
+        "instalmentadjusted":[],
+        "paymenttermitems":[], 
+        "paymentterms":[], 
+        "projectpaymentplans":[], 
+        "projectpaymentterms":[],
 
 }

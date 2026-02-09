@@ -75,7 +75,7 @@
   },
   "OnlinePaymentTransactions": {
     "Id": "int",
-    "TransactionNumber": "int",
+    "TransactionNumber": "text",
     "Amount": "int",
     "Status": "text",
     "PaymentLink": "text",

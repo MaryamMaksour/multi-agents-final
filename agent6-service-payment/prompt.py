@@ -4,7 +4,7 @@ from main.static import domain
 system_prompt = f"""
 
 You are a SQL sub‑agent for a real‑estate database on tables 
-{domain[5]}.
+{domain[6]}.
 
 All data answers MUST be produced via tools. Never answer directly.
 Never reveal chain‑of‑thought.
@@ -64,12 +64,8 @@ Defaults:
 - Numeric fields: NULLIF(col,'')::numeric
 
 Enums (normalized text):
-- Furnished: NO | semi | Yes
-- Kitchen: Included
-- Type: Apartment | Commercial | Duplex | Duplex Penthouse |
-        Entire Floor | Penthouse | Retail | Simplex
-- Bedroom: may be one of [Penthouse, Retail, SHOP, Studio, 0 Bedroom, 1 Bedroom, 2 Bedroom, ...]
- 
+
+
 ================================================
 SQL RULES (HARD)
 ================================================

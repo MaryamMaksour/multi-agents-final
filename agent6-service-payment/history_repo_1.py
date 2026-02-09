@@ -31,7 +31,7 @@ def new_turn_id() -> str:
 # Schema (single table: history)
 # -----------------------------
 CREATE_HISTORY_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS history5 (
+CREATE TABLE IF NOT EXISTS history6 (
   id BIGSERIAL PRIMARY KEY,
   session_id TEXT NOT NULL,
   turn_id UUID NOT NULL,
@@ -43,14 +43,14 @@ CREATE TABLE IF NOT EXISTS history5 (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_history5_session_created
-ON  history5(session_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_history6_session_created
+ON  history6(session_id, created_at);
 
-CREATE INDEX IF NOT EXISTS idx_history5_session_turn
-ON  history5(session_id, turn_id);
+CREATE INDEX IF NOT EXISTS idx_history6_session_turn
+ON  history6(session_id, turn_id);
 
-CREATE INDEX IF NOT EXISTS idx_history5_event_type
-ON  history5(event_type);
+CREATE INDEX IF NOT EXISTS idx_history6_event_type
+ON  history6(event_type);
 """
 
 
@@ -63,7 +63,7 @@ async def ensure_history_schema() -> None:
     async with pool.acquire() as conn:
         async with conn.transaction():
             await conn.execute(CREATE_HISTORY_TABLE_SQL)
-    logger.info(" history5 schema ensured (table:  history5).")
+    logger.info(" history6 schema ensured (table:  history6).")
 
 
 # -----------------------------
@@ -96,7 +96,7 @@ async def _insert_event(
         embed_user_query = await embed_query_async(user_query)
 
         sql = """
-        INSERT INTO  history5 (session_id, turn_id, event_type, payload,embed_user_query )
+        INSERT INTO  history6 (session_id, turn_id, event_type, payload,embed_user_query )
         VALUES ($1, $2, $3, $4::jsonb, $5::vector)
         """
      
@@ -106,7 +106,7 @@ async def _insert_event(
     elif event_type == "assistant_final":
 
         sql = """
-        INSERT INTO  history5 (session_id, turn_id, event_type, payload,time )
+        INSERT INTO  history6 (session_id, turn_id, event_type, payload,time )
         VALUES ($1, $2, $3, $4::jsonb, $5)
         """
      
@@ -116,7 +116,7 @@ async def _insert_event(
     else:
         
         sql = """
-        INSERT INTO  history5 (session_id, turn_id, event_type, payload )
+        INSERT INTO  history6 (session_id, turn_id, event_type, payload )
         VALUES ($1, $2, $3, $4::jsonb)
         """
      
@@ -131,7 +131,7 @@ async def log_pipeline(
     steps: list[dict],
 ) -> None:
     """
-    Stores ONE row in ` history5` for the entire pipeline of a turn.
+    Stores ONE row in ` history6` for the entire pipeline of a turn.
     steps = [{type, name, args, result}, ..., {type:'final', answer:...}]
     """
     payload = {"steps": steps}
@@ -147,7 +147,7 @@ async def log_user_message(
     context: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
-    Stores a user message event. One row in ` history5`.
+    Stores a user message event. One row in ` history6`.
     """
     payload = {
         "user_query": user_query,
@@ -165,7 +165,7 @@ async def log_assistant_final(
     time: str
 ) -> None:
     """
-    Stores the final assistant answer event. One row in ` history5`.
+    Stores the final assistant answer event. One row in ` history6`.
     `final_answer` can be dict/list/string.
     """
     payload = {
@@ -226,14 +226,14 @@ async def get_session_history(
     newest_first: bool = False,
 ) -> List[Dict[str, Any]]:
     """
-    Returns raw  history5 rows as JSON-safe dicts.
+    Returns raw  history6 rows as JSON-safe dicts.
     """
     pool = await get_pool()
     order = "DESC" if newest_first else "ASC"
 
     sql = f"""
     SELECT id, session_id, turn_id, event_type, payload, created_at
-    FROM  history5
+    FROM  history6
     WHERE session_id = $1
     ORDER BY created_at {order}
     LIMIT $2
@@ -266,7 +266,7 @@ async def get_turn_history(
 
     sql = """
     SELECT id, session_id, turn_id, event_type, payload, created_at
-    FROM  history5
+    FROM  history6
     WHERE session_id = $1 AND turn_id = $2
     ORDER BY created_at ASC
     """
@@ -288,10 +288,10 @@ async def get_turn_history(
 
 async def delete_session_history(session_id: str) -> None:
     """
-    Deletes all  history5 rows for a session.
+    Deletes all  history6 rows for a session.
     """
     pool = await get_pool()
-    sql = "DELETE FROM  history5 WHERE session_id = $1"
+    sql = "DELETE FROM  history6 WHERE session_id = $1"
     async with pool.acquire() as conn:
         await conn.execute(sql, session_id)
 
@@ -306,7 +306,7 @@ async def get_memory(query: str) -> list:
                 
                 WITH _user AS (
                 SELECT turn_id
-                FROM history5
+                FROM history6
                 WHERE event_type = 'user'
                     AND created_at >= NOW() - INTERVAL '3 days'
                     AND valid = true
@@ -316,7 +316,7 @@ async def get_memory(query: str) -> list:
                 )
                 SELECT  h.payload
                 FROM _user u
-                JOIN history5 h
+                JOIN history6 h
                 ON h.turn_id = u.turn_id
 
                 """
@@ -330,7 +330,7 @@ async def get_memory(query: str) -> list:
                 
                 WITH _user AS (
                 SELECT turn_id
-                FROM history5
+                FROM history6
                 WHERE event_type = 'user'
                     AND created_at >= NOW() - INTERVAL '3 days'
                     AND valid = false
@@ -340,7 +340,7 @@ async def get_memory(query: str) -> list:
                 )
                 SELECT  h.payload, h.reason
                 FROM _user u
-                JOIN history5 h
+                JOIN history6 h
                 ON h.turn_id = u.turn_id
 
                 """
