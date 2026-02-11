@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional, Sequence, List
 from langchain_core.tools import tool
 
 from main.static import SCHEMA as schema
-from main.static import  semantic_search_list, word_search_list, operation_search_list, domain
+from main.static import  semantic_search_list, word_search_list, operation_search_list, datetime_search_list, domain
 from main.embeddings import embed_query_async
 from main.conect_to_DB import get_pool
 from main.config import DIST_OP
@@ -85,7 +85,7 @@ def _ensure_select_only(sql: str) :
     if _DISALLOWED.search(low) or not (low.startswith("select") or low.startswith("with")):#
         result += "Only SELECT/WITH queries are allowed. rerun the tool using only select/with."
 
-    if "*" in low and (not "count" in low):
+    if "select *" in low or ".*" in low:
         result += "select * Not allowed list only columns needed or use column row_txt insted and re-run the tool."
 
     for w in s.split():
@@ -361,22 +361,25 @@ async def get_filter(columns: List[str], table_name) -> List[str]:
         filters = []
         for column in columns:
             res = ""
-            if column not in str(schema[table_name.lower()]):
+            if column.lower() not in str(schema[table_name.lower()]):
                 res = f"Unknown column: {column}. use one of the column in the table {table_name} schema only "
-            elif column in semantic_search_list[table_name]:
+            elif column.lower() in semantic_search_list[table_name]:
                 res = f" vector filters search for column {column} in table {table_name}. e.x.: embed_{column}  <=> $vector::vector < 0.35 "
-            elif column in word_search_list[table_name]:
+            elif column.lower() in word_search_list[table_name]:
                 res = f" ILIKE filters search for column {column} in table {table_name}. "
-            elif column in operation_search_list[table_name]:
+            elif column.lower() in operation_search_list[table_name]:
                 res = f" Operators search for column {column} in table {table_name}. "
+            elif column.lower() in datetime_search_list[table_name]:
+                res = f"cast to timestamp, for example WHERE DateOfReceipt::timestamp = '2025-06-09T00:00:00', WHERE (DateOfReceipt::timestamp)::date = '2025-06-09' WHERE DateOfReceipt::timestamp >= '2025-06-09T00:00:00' AND DateOfReceipt::timestamp < '2025-06-10T00:00:00'"
             else: 
                 res = f" any type of filters  for column {column} in table {table_name}. "
             
-            if column == "name" or column == "shortname":
-                res += " search using name and shortname. "
+            if column.lower() == "name" or column.lower() == "shortname":
+                res = f"vector filters search for column {column} in table {table_name}. e.x.: (embed_name  <=> $vector::vector < 0.35 or  embed_shortname  <=> $vector::vector < 0.35) use both column for better result. "
             
-            if column == "address" or column == "location":
-                res += " search using adress and location. "
+            if column.lower() == "address" or column.lower() == "location":
+                res = f"vector filters search for column {column} in table {table_name}. e.x.: (embed_location  <=> $vector::vector < 0.35 or  embed_address  <=> $vector::vector < 0.35) use both column for better result. "
+
 
             filters.append(res)
             
@@ -416,6 +419,7 @@ async def get_lsit_values(table: str, column: str) -> str:
 
     """
     try:
+        column = column.lower()
 
         sql = f""" select DISTINCT {column} from {table} """
         table = _validate_identifier(table)
@@ -434,8 +438,8 @@ async def get_lsit_values(table: str, column: str) -> str:
                 rows = await conn.fetch(sql)
                 if rows:
                     values = [r[column] for r in rows]
-                    if len(values) > 10:
-                        return f" we have multy value {len(values)} "
+                    if len(values) > 20:
+                        return f" we have multy value {len(values)}, here are some of them {values[:10]}"
                     
                     return f"in column {column} in table {table} we have this list {values}"
                 else:

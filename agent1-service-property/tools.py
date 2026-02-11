@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional, Sequence, List
 from langchain_core.tools import tool
 
 from main.static import SCHEMA as schema
-from main.static import  semantic_search_list, word_search_list, operation_search_list, domain
+from main.static import  semantic_search_list, word_search_list, operation_search_list, datetime_search_list, domain
 from main.embeddings import embed_query_async
 from main.conect_to_DB import get_pool
 from main.config import DIST_OP
@@ -48,8 +48,28 @@ _DISALLOWED = re.compile(
     r"\b(insert|update|delete|drop|alter|truncate|create|grant|revoke)\b",
     flags=re.IGNORECASE,
 )
+def _ensure_No_embed_in_select(sql: str) :
 
-def _ensure_select_only(sql: str) -> None:
+    s = str(sql).lower()
+    s = (s or "").strip()
+
+    for i in range (len(s.split())):
+        if s[i] == "select":
+            while s[i] != 'from':
+                i += 1
+
+                if s[i].find("embed"):
+                    return ValueError("can not select embed column")
+                
+    return sql
+
+
+
+
+
+
+
+def _ensure_select_only(sql: str) :
     s = str(sql)
     s = (s or "").strip()
     if not s:
@@ -61,9 +81,11 @@ def _ensure_select_only(sql: str) -> None:
     if ";" in low:
         # prevent stacked statements
         result += "Semicolons are not allowed. re-run the tool without ; ."
+
     if _DISALLOWED.search(low) or not (low.startswith("select") or low.startswith("with")):#
         result += "Only SELECT/WITH queries are allowed. rerun the tool using only select/with."
-    if "*" in low and (not "count" in low):
+
+    if "select *" in low or ".*" in low:
         result += "select * Not allowed list only columns needed or use column row_txt insted and re-run the tool."
 
     for w in s.split():
@@ -79,20 +101,6 @@ def _ensure_select_only(sql: str) -> None:
       
     return sql
 
-def _ensure_No_embed_in_select(sql: str) :
-
-    s = str(sql).lower()
-    s = (s or "").strip()
-
-    for i in range (len(s.split())):
-        if s[i] == "select":
-            while s[i] != 'from':
-                i += 1
-
-                if s[i].find("embed"):
-                    return ValueError("can not select embed column")
-                
-    return sql
 
 
 def _validate_identifier(name: str) -> str:
@@ -130,7 +138,6 @@ async def _semantic_table_records(
     except Exception as e:
         return {"error": f" error with embedding: {e}"}
     
-
     max_results = max(2, min(max_results, 10))
 
     sql = f"""
@@ -160,9 +167,7 @@ async def _semantic_table_records(
 async def get_table_records(query: str, table_name: str, mx: int = 5) -> Dict[str, Any]:
     """
     Semantic name resolution tool.
-    Use ONLY for vague, semantic, name-based lookups.
-     used it when other tools did not give You answer (secondry tool).
-
+    Use ONLY for vague, semantic, name-based lookups, or other tools did not give answer (secondry tool).
     Returns JSON ONLY.
     """
     table_name = table_name.lower()
@@ -239,6 +244,8 @@ async def db_execute(   query: str,
         if type(count_query) is not str :
             return f"error {count_query }"
         
+
+        
         query = query.lower()
         if "limit $" not in query:
             return f"error limit $n should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"
@@ -246,8 +253,12 @@ async def db_execute(   query: str,
         if "offset $" not in query:
             return f"error offset $n should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"
         
-        if int(params[-2]) > 6:
-            return f"error, limit should be less than 6"
+        if len(params) >= 2:
+            if int(params[-2]) > 100:
+                return f"error, limit should be less than 100"
+        else:
+            return f"error offset and limit should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"
+
         
         resolved_params = []
         for p in params:
@@ -258,7 +269,7 @@ async def db_execute(   query: str,
         resolved_count_params = []
         for p in count_params:
             if isinstance(p, str) and p.startswith("vec_"):
-                p = get_vector(p) 
+                p = get_vector(p)   
             resolved_count_params.append(p)
 
         pool = await get_pool()
@@ -350,27 +361,28 @@ async def get_filter(columns: List[str], table_name) -> List[str]:
         filters = []
         for column in columns:
             res = ""
-            if column not in str(schema[table_name.lower()]):
+            if column.lower() not in str(schema[table_name.lower()]):
                 res = f"Unknown column: {column}. use one of the column in the table {table_name} schema only "
-            elif column in semantic_search_list[table_name]:
-                res = f" vector filters search for column {column} in table {table_name}. e.x.:   embed_{column} <=> $vector::vector < 0.35 "
-            elif column in word_search_list[table_name]:
+            elif column.lower() in semantic_search_list[table_name]:
+                res = f" vector filters search for column {column} in table {table_name}. e.x.: embed_{column}  <=> $vector::vector < 0.35 "
+            elif column.lower() in word_search_list[table_name]:
                 res = f" ILIKE filters search for column {column} in table {table_name}. "
-            elif column in operation_search_list[table_name]:
+            elif column.lower() in operation_search_list[table_name]:
                 res = f" Operators search for column {column} in table {table_name}. "
+            elif column.lower() in datetime_search_list[table_name]:
+                res = f"cast to timestamp, for example WHERE DateOfReceipt::timestamp = '2025-06-09T00:00:00', WHERE (DateOfReceipt::timestamp)::date = '2025-06-09' WHERE DateOfReceipt::timestamp >= '2025-06-09T00:00:00' AND DateOfReceipt::timestamp < '2025-06-10T00:00:00'"
             else: 
                 res = f" any type of filters  for column {column} in table {table_name}. "
             
-            if column == "name" or column == "shortname":
-                res += " search using name and shortname. "
+            if column.lower() == "name" or column.lower() == "shortname":
+                res = f"vector filters search for column {column} in table {table_name}. e.x.: (embed_name  <=> $vector::vector < 0.35 or  embed_shortname  <=> $vector::vector < 0.35) use both column for better result. "
             
-            if column == "address" or column == "location":
-                res += " search using adress and location. "
+            if column.lower() == "address" or column.lower() == "location":
+                res = f"vector filters search for column {column} in table {table_name}. e.x.: (embed_location  <=> $vector::vector < 0.35 or  embed_address  <=> $vector::vector < 0.35) use both column for better result. "
 
             filters.append(res)
             
         return filters
-    
     except Exception as e:
         return [f"erorr while getting filter type : {e}"]
  
@@ -391,10 +403,10 @@ async def get_table_schema(tables: List[str]) -> Dict[str, Dict[str, Any]]:
             results.append(f"schema for table {table.lower()} : {schm}")
 
         return results
+    
     except Exception as e:
         return {"error": {"error while trying to get tables schema": e}}
     
-
 @tool
 async def get_lsit_values(table: str, column: str) -> str:
 
@@ -406,6 +418,7 @@ async def get_lsit_values(table: str, column: str) -> str:
 
     """
     try:
+        column = column.lower()
 
         sql = f""" select DISTINCT {column} from {table} """
         table = _validate_identifier(table)
@@ -422,12 +435,15 @@ async def get_lsit_values(table: str, column: str) -> str:
         async with pool.acquire() as conn:
             try:
                 rows = await conn.fetch(sql)
-                values = [r[column] for r in rows]
-                if len(values) > 15:
-                    return f" we have multy value {len(values)} "
+                if rows:
+                    values = [r[column] for r in rows]
+                    if len(values) > 20:
+                        return f" we have multy value {len(values)}, here are some of them {values[:10]}"
+                    
+                    return f"in column {column} in table {table} we have this list {values}"
+                else:
+                    return f"all value in colmn {column} is Null"
                 
-                return f"in column {column} in table {table} we have this list {values}"
-            
             except Exception as e:
                 logger.exception("Semantic search failed")
                 return {"error": f"SQL error: {str(e)}"}
@@ -435,12 +451,3 @@ async def get_lsit_values(table: str, column: str) -> str:
     except Exception as e:
         return {"error": {"error while trying to get tables schema": e}}
 
-
-'''import asyncio
-
-def x():
-  
-    y = asyncio.run(get_lsit_values(column="status", table="buildings"))
-    print(y)
-
-x()'''

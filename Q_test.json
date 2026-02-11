@@ -1,0 +1,56 @@
+[
+    
+    {
+        "q": "Who is the reporting manager of the agent handling the deal  name (D-002380-LUME-1108)?",
+        "think": "agent id = 540, name: Burulcha Musabekova, magager: 523",
+        "ans": "Ahmad Rabih El Turk",
+        "agents": "4, 2"
+    },
+    {
+        "q": "active deals for units in building named Volna by Kasco",
+        "think": " unit id 1604 in building id = 12, ",
+        "ans": "yes",
+        "agents": "1, 4"
+    },
+    {
+        "q": "is customer SERGE LEVY has any deals on building Hyde Residences Dubai Hills?",
+        "think": " deal id = 1859 on unit id = 1256 for custommer id = 1892, building id = 9",
+        "ans": " D-002040-Hyde-1704 ",
+        "agents":"3, 1, 4"
+    },
+    {
+        "q": "Which booked units in Marina have an original deal price higher than the current unit price?",
+        "think": " ",
+        "ans": " "
+    },
+    {
+        "q": "How many active deals are for units in projects by developer Dar Al Karama?",
+        "think": " Dar Al Karama id = 1, building id = 1",
+        "ans": "many "
+    },
+    {
+        "q": "Give me all 2BR units in buildings in  al Jadaf area that is below 4M AED. ",
+        "think": " ",
+        "ans": "There are 5 units in building 12 with 2 bedrooms and prices under 4,000,000. Examples include Unit 109 (2,609,777 AED), Unit 207 (2,387,777 AED), and Unit 307 (1,975,777 AED), all with areas ranging from 975.96 to 1,623.2 sq ft. ",
+        "agents": "1"
+    },
+    {
+        "q": " How many projects does developre S AND S REAL ESTATE DEVELOPMENT L.L.C  have?",
+        "think": " ",
+        "ans": " The developer **S AND S REAL ESTATE DEVELOPMENT L.L.C** (ID 3) has **2 projects**:  \n1. **RISE RESIDENCES** (ID 3) – Status: Sold Out.  \n2. **LUME RESIDENCES** (ID 4) – Status: Active.",
+        "agents": "1"
+    },
+    {
+        "q": " Which projects have commercial units available?",
+        "think": " ",
+        "ans": " Null ",
+        "agents": "1"
+    },
+    {
+        "q": " ",
+        "think": " ",
+        "ans": " ",
+        "agents": ""
+    }
+]
+

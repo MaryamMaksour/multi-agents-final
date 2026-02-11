@@ -37,9 +37,13 @@ General Rules:
 - ALWAYS use tools for database answers
 - On SQL error → fix and retry
 - Pagination REQUIRED for every db_execute call
+- use postgresql build in function like now() to get the time or date instead of getting it from the user, or your informations to make sure the data is correct and up to date.
+all date columns with type text and its formate is:  YYYY-MM-DDThh:mm:ss 
 
 You should first to call get_table_schema(table) first , then call get_filter(columns, tablename) then
 use db_execute in case you get No rows use get_table_records and back to the begine to execute new query
+
+use COALESCE(..., 0) prevents null results
 ================================================
 SCHEMA ACCESS (TOOL‑AWARE)
 ================================================

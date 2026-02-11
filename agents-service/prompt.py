@@ -72,7 +72,15 @@ CRM_TOOL
 DEALS_TOOL  
 - Domain: deals , view on deals_units (info about deal and all unit information ), deals_projects (info about deal and its project information), 
          customer_deals (info about deal and its customer information), deals_agents (info about deal and its agent information), deals_directors (info about deal and its directoers information) 
-   {domain[6]}.
+   {domain[4]}.
+
+SALES_TOOL
+- Domain: {domain[5]}.
+
+
+PAYMENT_TOOL
+- Domain: {domain[6]}.
+
 
 all tools supports:
 - batching, entity lookup, cursor pagination 

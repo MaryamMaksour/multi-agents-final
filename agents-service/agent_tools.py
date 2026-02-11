@@ -16,6 +16,9 @@ PROPERTY_AGENT_URL = os.getenv("PROPERTY_AGENT_URL", "http://localhost:8001/chat
 ORGANIZATION_AGENT_URL = os.getenv("ORGANIZATION_AGENT_URL", "http://localhost:8002/chat")
 CRM_AGENT_URL = os.getenv("CRM_AGENT_URL", "http://localhost:8003/chat")
 DEALS_AGENT_URL = os.getenv("DEALS_AGENT_URL", "http://localhost:8004/chat")
+SALES_AGENT_URL = os.getenv("SALES_AGENT_URL", "http://localhost:8006/chat")
+PAYMENT_AGENT_URL = os.getenv("PAYMENT_AGENT_URL", "http://localhost:8007/chat")
+
 
 DEFAULT_TIMEOUT = int(os.getenv("TOOLS_HTTP_TIMEOUT_SECS", "3600"))
 DEFAULT_SESSION = os.getenv("DEFAULT_TOOL_SESSION_ID", "agents:subsession")
@@ -196,8 +199,77 @@ async def DEALS_TOOL(
 
 
 
+@tool
+async def SALES_TOOL(
+    query: str,
+    cursor: Optional[str] = None,
+    session_id: str = DEFAULT_SESSION,
+    turn_id: Optional[str] = None,
+    timeout: int = DEFAULT_TIMEOUT,
+) -> Any:
+    """
+    Delegate sales-related queries.
+    Inputs:
+      - query: natural language question
+      - cursor: next page token (opaque)
+    Returns (normalized):
+      {
+        "sql": [...], # SQL query the sup agent run it
+        "params" : [], # paramas for sql 
+        "data" [], # rows 
+        "has_more": bool,
+        "next_cursor": str,
+         
+      }
+    """
+    if not isinstance(query, str) or not query.strip():
+        return {"error": "SALES_service_error: missing_or_invalid_query"}
+
+    payload = _build_payload(query, cursor, session_id, turn_id)
+
+    try:
+        return await _post_json(SALES_AGENT_URL, payload, timeout)
+         
+    except Exception as e:
+        return {"error": f"SALES_service_error: {e}"}
+
+@tool
+async def PAYMENT_TOOL(
+    query: str,
+    cursor: Optional[str] = None,
+    session_id: str = DEFAULT_SESSION,
+    turn_id: Optional[str] = None,
+    timeout: int = DEFAULT_TIMEOUT,
+) -> Any:
+    """
+    Delegate payment-related queries.
+    Inputs:
+      - query: natural language question
+      - cursor: next page token (opaque)
+    Returns (normalized):
+      {
+        "sql": [...], # SQL query the sup agent run it
+        "params" : [], # paramas for sql 
+        "data" [], # rows 
+        "has_more": bool,
+        "next_cursor": str,
+         
+      }
+    """
+    if not isinstance(query, str) or not query.strip():
+        return {"error": "PAYMENT_service_error: missing_or_invalid_query"}
+
+    payload = _build_payload(query, cursor, session_id, turn_id)
+
+    try:
+        return await _post_json(PAYMENT_AGENT_URL, payload, timeout)
+         
+    except Exception as e:
+        return {"error": f"PAYMENT_service_error: {e}"}
+
+
 # Exports
-tools = [property_TOOL, Organization_TOOL, CRM_TOOL, DEALS_TOOL ]  
+tools = [property_TOOL, Organization_TOOL, CRM_TOOL, DEALS_TOOL, SALES_TOOL, PAYMENT_TOOL]  
 tools_dict = {tool.name: tool for tool in tools}
 
 def get_tools():

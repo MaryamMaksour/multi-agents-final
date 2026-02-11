@@ -5,7 +5,7 @@ client = AgentClient(  timeout=36000)  # match your long timeout if needed
 
 print("Health:", client.health())
 
-answer = client.chat("send all info for payment id = 1",cursor = '' )
+answer = client.chat("How many payments were made by cheque this month?  ",cursor = '' )
 print("Assistant:", answer)
 
 
