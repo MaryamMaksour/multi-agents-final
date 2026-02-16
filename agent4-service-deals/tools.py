@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import base64
+import zlib
 
 from typing import Any, Dict, Optional, Sequence, List
 
@@ -36,11 +37,15 @@ class QueryResult():
 # Cursor Encoding / Decoding (OPAQUE, QUERY‑LOCKED)
 # ============================================================
 def encode_cursor(payload: Dict[str, Any]) -> str:
-    return base64.b64encode(json.dumps(payload).encode()).decode()
-
+    s = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    c = zlib.compress(s, level=9)
+    return base64.urlsafe_b64encode(c).rstrip(b"=").decode("ascii")
 
 def decode_cursor(cursor: str) -> Dict[str, Any]:
-    return json.loads(base64.b64decode(cursor.encode()).decode())
+    pad = '=' * (-len(cursor) % 4)
+    raw = base64.urlsafe_b64decode(cursor + pad)
+    s = zlib.decompress(raw).decode("utf-8")
+    return json.loads(s)
 
 
 # --- Minimal query hardening ---
@@ -48,26 +53,21 @@ _DISALLOWED = re.compile(
     r"\b(insert|update|delete|drop|alter|truncate|create|grant|revoke)\b",
     flags=re.IGNORECASE,
 )
+
 def _ensure_No_embed_in_select(sql: str) :
 
     s = str(sql).lower()
     s = (s or "").strip()
+    s = s.split()
 
-    for i in range (len(s.split())):
+    for i in range (len(s)):
         if s[i] == "select":
             while s[i] != 'from':
                 i += 1
-
-                if s[i].find("embed"):
+                if s[i].find("embed") != -1:
                     return ValueError("can not select embed column")
                 
     return sql
-
-
-
-
-
-
 
 def _ensure_select_only(sql: str) :
     s = str(sql)
@@ -218,27 +218,19 @@ async def db_execute(   query: str,
     row_count = None
 
     try:
-        if cursor:
-            state = decode_cursor(cursor)
-            offset = state["offset"]
-            query = state["query"]
-        else:
-            offset = 0
+        offset = 0
             
         query = _ensure_select_only(query)
         if type(query) is not str :
             return f"error { query }"
         
-        
         query = _ensure_No_embed_in_select(query)
         if type(query) is not str :
             return f"error {query }"
-        
 
         count_query = _ensure_select_only(count_query)
         if type(count_query) is not str :
             return f"error { count_query }"
-        
 
         count_query = _ensure_No_embed_in_select(count_query)
         if type(count_query) is not str :
@@ -248,16 +240,16 @@ async def db_execute(   query: str,
         
         query = query.lower()
         if "limit $" not in query:
-            return f"error limit $n should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"
+            return f"error limit $n should be in the query in this shape  limit &n offset &m, and params = [..,&limit_value, &offset_value]"
         
         if "offset $" not in query:
-            return f"error offset $n should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"
+            return f"error offset $n should be in the query in this shape  limit &n offset &m, and params = [..,&limit_value, &offset_value]"
         
         if len(params) >= 2:
-            if int(params[-2]) > 100:
-                return f"error, limit should be less than 100"
+            if int(params[-2]) > 100 and int(params[-2]) > 0:
+                return f"error, limit should be between [1, 100] to avoid too much data, and it should be in the query in this shape  limit &n offset &m, and params = [..,&limit_value, &offset_value]"
         else:
-            return f"error offset and limit should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"
+            return f"error offset and limit should be in the query in this shape  limit &n offset &m, and params =[..,&limit_value, &offset_value]"
 
         
         resolved_params = []
@@ -276,6 +268,7 @@ async def db_execute(   query: str,
         async with pool.acquire() as conn:
               try:
                 rows = await conn.fetch(query, *resolved_params)
+                print("rows", rows)
                 # Convert asyncpg Records to JSON-safe dicts
                 data = [dict(r) for r in rows]
                 row_count = len(data)
@@ -289,6 +282,7 @@ async def db_execute(   query: str,
                 if has_more:
                     next_cursor = encode_cursor({
                         "offset": next_offset,
+                        "resolved_params": resolved_params,
                         "query": query
                     })
 
@@ -336,7 +330,37 @@ async def db_execute(   query: str,
         logger.exception(f"db_execute failed + {error_msg}")
         return {"error": error_msg}
 
-                
+    
+@tool
+async def execute_next_cursor(cursor: str) -> Dict[str, Any]:
+    """
+    use this tool insed of re call the agent
+    Helper tool to execute the next page of results based on a cursor.
+    Decodes the cursor to get the next query and offset, then calls db_execute.
+
+    input: cursor (str): The encoded cursor returned from tool agent.
+     return dict{{"rows": all data from query, 
+                        "row_count": result from count_query, 
+                        "has_more": has_more if total > limit+ offset,
+                        "next_cursor": next_cursor} } 
+    """
+    try:
+        state = decode_cursor(cursor)
+        query = state["query"]
+        offset = state["offset"]
+        params = state["resolved_params"]
+        params[-1] = offset  # Assuming the last parameter is the offset for pagination
+
+     
+        # For count_query and count_params, you would also need to reconstruct them based on your application's needs
+        count_query = ""  # Placeholder
+        count_params = []  # Placeholder
+
+        return await db_execute(query=query, params=params, offset=offset, count_query=count_query, count_params=count_params, cursor=None)
+
+    except Exception as e:
+        logger.exception("execute_next_cursor failed")
+        return {"error": str(e)}      
 
 @tool
 async def embed_query_tool(query: str):

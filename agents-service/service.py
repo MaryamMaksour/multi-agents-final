@@ -22,7 +22,7 @@ from main.history_repo import new_turn_id, log_user_message, log_assistant_final
 from main.pipeline_utils import extract_pipeline_main
 
 logger = logging.getLogger(__name__)
-
+'''
 # ------------------------------------------------------------
 # TRACING (Phoenix / OpenInference)
 # ------------------------------------------------------------
@@ -44,7 +44,7 @@ if ENABLE_PHOENIX:
     except Exception:
         tracer_provider = None
 
-
+'''
 # ------------------------------------------------------------
 # Conversation store (sessionized, thread-safe)
 # ------------------------------------------------------------
