@@ -24,6 +24,14 @@
 #     silently discarded the decoded offset - this is that fix, applied
 #     once instead of needing to be re-applied per copy).
 #   - Offset is now bounds-checked the same way limit already was.
+#   - Query validation was replaced entirely with sql_validation.py's
+#     sqlglot-based AST check. The regex/token-scan version this replaced
+#     had a real bypass (the embed-column guard stopped scanning at the
+#     first "from" it hit, including one inside a nested subquery) and a
+#     real correctness bug (it lowercased the whole query - including
+#     string literals - before executing it, silently turning `WHERE
+#     status = 'Active'` into `'active'`). A parser can't be fooled by
+#     nesting the way a token scan can.
 from __future__ import annotations
 
 import base64
@@ -47,16 +55,12 @@ from main.static import (
 )
 from main.vector_store import get_vector, store_vector
 
+from .sql_validation import validate_readonly_query
+
 logger = logging.getLogger(__name__)
 
 MAX_OFFSET = 5000
 
-# --- Minimal query hardening ---
-_DISALLOWED = re.compile(
-    r"\b(insert|update|delete|drop|alter|truncate|create|grant|revoke)\b",
-    flags=re.IGNORECASE,
-)
-_TABLE_REF_RE = re.compile(r"\b(?:from|join)\s+([a-zA-Z_][a-zA-Z0-9_]*)", re.IGNORECASE)
 _COLUMN_LINE_RE = re.compile(r'^"?([A-Za-z_][A-Za-z0-9_]*)"?\s+\S')
 
 
@@ -83,56 +87,6 @@ def _extract_column_names(table_schema: Dict[str, Any]) -> set:
         if m:
             names.add(m.group(1).lower())
     return names
-
-
-def _extract_referenced_tables(sql: str) -> set:
-    return {m.group(1).lower() for m in _TABLE_REF_RE.finditer(sql)}
-
-
-def _check_tables_allowed(sql: str, allowed: set) -> Optional[str]:
-    referenced = _extract_referenced_tables(sql)
-    disallowed = referenced - allowed
-    if disallowed:
-        return (
-            f"Query references tables outside this agent's domain: {sorted(disallowed)}. "
-            f"Allowed tables: {sorted(allowed)}."
-        )
-    return None
-
-
-def _ensure_select_only(sql: str):
-    s = str(sql)
-    s = (s or "").strip()
-    if not s:
-        return ValueError("Empty query.")
-    low = s.lower()
-
-    result = ""
-
-    if ";" in low:
-        # prevent stacked statements
-        result += "Semicolons are not allowed. re-run the tool without ; ."
-
-    if _DISALLOWED.search(low) or not (low.startswith("select") or low.startswith("with")):
-        result += "Only SELECT/WITH queries are allowed. rerun the tool using only select/with."
-
-    if "select *" in low or ".*" in low:
-        result += "select * Not allowed list only columns needed or use column row_txt insted and re-run the tool."
-
-    # Scans the WHOLE query, not just up to the first "from" - a query with
-    # a subquery in its select-list (e.g. "select (select id from x where
-    # embed_name is not null limit 1) from y") hits an inner "from" first,
-    # and stopping there would let an embed_* reference appearing after it
-    # slip through unchecked.
-    for w in low.split():
-        if w[:6] == "embed_" or w[2:8] == "embed_" or w == "embedding":
-            result += "You can not return any embed column in select, delete it and re-run the tool again"
-            break
-
-    if result != "":
-        return ValueError(result)
-
-    return sql
 
 
 def _validate_identifier(name: str):
@@ -284,21 +238,13 @@ def build_domain_tools(allowed_tables: List[str], log_sql_query: Callable[..., A
             else:
                 offset = 0
 
-            query = _ensure_select_only(query)
-            if type(query) is not str:
-                return {"error": str(query)}
+            query_err = validate_readonly_query(query, allowed_set)
+            if query_err:
+                return {"error": query_err}
 
-            table_err = _check_tables_allowed(query, allowed_set)
-            if table_err:
-                return {"error": table_err}
-
-            count_query = _ensure_select_only(count_query)
-            if type(count_query) is not str:
-                return {"error": str(count_query)}
-
-            count_table_err = _check_tables_allowed(count_query, allowed_set)
-            if count_table_err:
-                return {"error": count_table_err}
+            count_query_err = validate_readonly_query(count_query, allowed_set)
+            if count_query_err:
+                return {"error": count_query_err}
 
             # Only used for the LIMIT/OFFSET placeholder presence check below -
             # `query` itself must keep its original case, since it's what

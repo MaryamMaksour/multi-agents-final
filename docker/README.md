@@ -96,6 +96,21 @@ for queued execution:
 
 Track progress for any task in Flower at http://localhost:5555.
 
+## SQL safety
+
+`db_execute` (the tool each sub-agent uses to run LLM-authored SQL) is
+validated with `agent_common/sql_validation.py` - a real SQL parser
+(sqlglot), not regex: single SELECT/WITH/UNION statement only, no
+`embed_*`/`embedding` columns anywhere in the query, no tables outside
+the calling agent's domain, no filesystem/administrative function calls.
+
+That's still an application-layer check. `docker/postgres/least_privilege_roles.sql`
+adds the DB-layer backstop: one Postgres role per domain, `SELECT`-only on
+that domain's own tables, so a bug in the app-layer check still can't
+reach another domain's data. Run it once against the live database, then
+see the wiring notes at the bottom of that file for pointing each
+service's `PG_USER`/`PG_PASSWORD` at its own role in `docker-compose.yml`.
+
 ## Monitoring
 
 Each FastAPI service exposes Prometheus metrics at `/TjgR_87vhp_bs8KJ`
