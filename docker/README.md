@@ -1,14 +1,21 @@
 # Docker Setup for Multi-Agent App
 
 This directory contains the Docker setup for the multi-agent application: the
-orchestrator (`agents-service`) and its six sub-agents, plus the Celery task
-queue, Flower monitoring, and the full observability stack.
+orchestrator (`agents-service`) and its three domain sub-agents, plus the
+Celery task queue, Flower monitoring, and the full observability stack.
 
 ## Services
 
-- **agents-service**: Orchestrator FastAPI app (port 8000)
-- **agent-property / agent-hr / agent-crm / agent-deals / agent-sales / agent-payment**:
-  Sub-agent FastAPI services (ports 8001-8004, 8006, 8007)
+- **agents-service**: Orchestrator FastAPI app (port 8000, published to the host)
+- **agent-property-deals**: Property inventory + deals (port 8001, internal only)
+- **agent-people**: Organization (HR) + CRM (port 8002, internal only)
+- **agent-sales-payments**: Bookings + payment lifecycle (port 8003, internal only)
+
+Sub-agent ports use `expose:` rather than `ports:` - they're reachable from
+other containers on the compose network but not published to the host, so
+nothing outside the network can call a sub-agent directly and skip the
+orchestrator (and its own domain-scoped tool set).
+
 - **celery-worker**: Runs `/chat/async` requests from any service as background tasks
 - **flower**: Celery task monitoring dashboard (port 5555)
 - **Nginx**: Routes to the orchestrator (agents-service)
@@ -59,7 +66,7 @@ docker compose up -d pgvector rabbitmq redis postgres-exporter
 # Wait for them to be healthy
 sleep 30
 # Start the application services
-docker compose up --build -d agents-service agent-property agent-hr agent-crm agent-deals agent-sales agent-payment celery-worker flower nginx prometheus grafana node-exporter
+docker compose up --build -d agents-service agent-property-deals agent-people agent-sales-payments celery-worker flower nginx prometheus grafana node-exporter
 ```
 
 To tear everything down (including volumes):
@@ -72,7 +79,7 @@ docker compose down -v --remove-orphans
 
 - Orchestrator API: http://localhost:8000 (docs at /docs)
 - Nginx (serving the orchestrator): http://localhost
-- Sub-agents: http://localhost:8001 .. 8004, 8006, 8007
+- Sub-agents: internal only (not published to the host) - reach them via `docker compose exec` or from inside the network for debugging
 - Flower: http://localhost:5555
 - RabbitMQ management UI: http://localhost:15672
 - Prometheus: http://localhost:9090
@@ -93,7 +100,7 @@ Track progress for any task in Flower at http://localhost:5555.
 
 Each FastAPI service exposes Prometheus metrics at `/TjgR_87vhp_bs8KJ`
 (intentionally not `/metrics`, to avoid casual public discovery). Prometheus
-scrapes all 7 services plus node-exporter and postgres-exporter automatically.
+scrapes all 4 services plus node-exporter and postgres-exporter automatically.
 
 Log into Grafana at http://localhost:3000 (default admin/admin) and add
 Prometheus (http://prometheus:9090) as a data source.

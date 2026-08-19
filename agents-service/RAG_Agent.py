@@ -15,8 +15,8 @@ from langchain_core.messages import BaseMessage, SystemMessage, ToolMessage, Hum
 from main.llm import get_llm
 from .agent_tools import get_tools, get_tools_dict
 from .prompt import system_prompt
-from main.history_repo import log_tool_call, get_memory
-from main.config import MAX_PAGES_PER_TOOL   
+from .history_repo import log_tool_call, get_memory
+from main.config import MAX_PAGES_PER_TOOL
 
 logger = logging.getLogger(__name__)
 

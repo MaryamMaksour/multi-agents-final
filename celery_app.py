@@ -41,12 +41,9 @@ celery_app.conf.update(
 
     task_routes={
         "tasks.agent_chat.run_orchestrator_chat": {"queue": "orchestrator_queue"},
-        "tasks.agent_chat.run_property_chat": {"queue": "property_queue"},
-        "tasks.agent_chat.run_hr_chat": {"queue": "hr_queue"},
-        "tasks.agent_chat.run_crm_chat": {"queue": "crm_queue"},
-        "tasks.agent_chat.run_deals_chat": {"queue": "deals_queue"},
-        "tasks.agent_chat.run_sales_chat": {"queue": "sales_queue"},
-        "tasks.agent_chat.run_payment_chat": {"queue": "payment_queue"},
+        "tasks.agent_chat.run_property_deals_chat": {"queue": "property_deals_queue"},
+        "tasks.agent_chat.run_people_chat": {"queue": "people_queue"},
+        "tasks.agent_chat.run_sales_payments_chat": {"queue": "sales_payments_queue"},
     },
 
     timezone="UTC",

@@ -4,6 +4,17 @@
 # this file before, differing only in one hardcoded table name
 # (history1..history6). build_history_repo() is that same implementation,
 # parameterized by table_name instead of copy-pasted per service.
+#
+# Redesigned so semantic memory recall actually works: the schema now has a
+# real `reason` column, `valid` is computed automatically from each turn's
+# outcome (no manual curation needed), and it's set on the 'user' row via an
+# UPDATE issued from log_assistant_final once the outcome is known - the
+# validity of a turn can only be known after it completes, not when the user
+# message is first logged. get_memory() returns the full trace for each
+# matched turn (the user question plus its assistant_final row, whose
+# payload already carries every tool call - name, args, result - from
+# extract_pipeline()), not just the final answer text, so prompts get real
+# reasoning/tool-calling examples, not just Q/A pairs.
 from __future__ import annotations
 
 import json
@@ -25,6 +36,7 @@ EVENT_ASSISTANT_FINAL = "assistant_final"
 EVENT_PIPELINE = "pipeline"
 
 _VALID_TABLE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_MAX_REASON_LEN = 500
 
 
 def new_turn_id() -> str:
@@ -41,6 +53,33 @@ def _json_dumps(obj: Any) -> str:
             return "<non-serializable>"
 
     return json.dumps(obj, ensure_ascii=False, default=default)
+
+
+def _find_error(payload: Any) -> Optional[str]:
+    """
+    Walks a final-answer payload (a dict, or a list of pipeline steps) looking
+    for an {"error": ...} anywhere shallow in it. Used to auto-compute
+    turn validity: a turn with no error anywhere in its outcome is a good
+    few-shot example; a turn that errored is kept too (as a short-lived
+    "what not to do" example) with the error text as its reason.
+    """
+    def _from_dict(d: dict) -> Optional[str]:
+        if "error" in d and d["error"]:
+            return str(d["error"])[:_MAX_REASON_LEN]
+        for v in d.values():
+            found = _find_error(v)
+            if found:
+                return found
+        return None
+
+    if isinstance(payload, dict):
+        return _from_dict(payload)
+    if isinstance(payload, list):
+        for item in payload:
+            found = _find_error(item)
+            if found:
+                return found
+    return None
 
 
 @dataclass
@@ -73,6 +112,7 @@ def build_history_repo(table_name: str) -> HistoryRepo:
       payload JSONB NOT NULL DEFAULT '{{}}'::jsonb,
       time  text,
       valid boolean,
+      reason text,
       embed_user_query vector(1024),
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
@@ -131,6 +171,24 @@ def build_history_repo(table_name: str) -> HistoryRepo:
             async with pool.acquire() as conn:
                 await conn.execute(sql, session_id, turn_uuid, event_type, _json_dumps(payload))
 
+    async def _mark_turn_validity(turn_id: Union[str, uuid.UUID], valid: bool, reason: Optional[str]) -> None:
+        """
+        Stamps the outcome onto this turn's 'user' row, which is what
+        get_memory() filters and orders by (it's the row carrying the
+        semantic embedding of the question). Validity can only be known
+        after the turn finishes, so this runs from log_assistant_final,
+        not from log_user_message.
+        """
+        pool = await get_pool()
+        turn_uuid = uuid.UUID(turn_id) if isinstance(turn_id, str) else turn_id
+        sql = f"""
+        UPDATE {table_name}
+        SET valid = $1, reason = $2
+        WHERE turn_id = $3 AND event_type = 'user'
+        """
+        async with pool.acquire() as conn:
+            await conn.execute(sql, valid, reason, turn_uuid)
+
     async def log_pipeline(session_id: str, turn_id: str, steps: list) -> None:
         """Stores ONE row for the entire pipeline of a turn."""
         payload = {"steps": steps}
@@ -152,9 +210,23 @@ def build_history_repo(table_name: str) -> HistoryRepo:
         final_answer: Any,
         time: str,
     ) -> None:
-        """Stores the final assistant answer event. `final_answer` can be dict/list/string."""
+        """
+        Stores the final assistant answer event - `final_answer` is
+        typically the full step-by-step pipeline (tool calls with their
+        args/results, then the final answer) produced by
+        main.pipeline_utils.extract_pipeline(), which is what makes this
+        row usable as a "thinking + tool calling" few-shot example, not
+        just a bare answer. Also auto-marks this turn's 'user' row valid/
+        invalid based on whether an error shows up anywhere in the outcome.
+        """
         payload = {"final_answer": final_answer}
         await _insert_event(session_id, turn_id, EVENT_ASSISTANT_FINAL, payload, time=time)
+
+        error_reason = _find_error(final_answer)
+        try:
+            await _mark_turn_validity(turn_id, valid=(error_reason is None), reason=error_reason)
+        except Exception:
+            logger.exception("Failed to mark turn validity for turn_id=%s", turn_id)
 
     async def log_tool_call(
         session_id: str,
@@ -263,59 +335,83 @@ def build_history_repo(table_name: str) -> HistoryRepo:
         async with pool.acquire() as conn:
             await conn.execute(sql, session_id)
 
+    async def _fetch_good_examples(conn, vec, limit: int) -> list:
+        sql = f"""
+        WITH _match AS (
+            SELECT turn_id
+            FROM {table_name}
+            WHERE event_type = 'user'
+              AND valid = true
+              AND created_at >= NOW() - INTERVAL '3 days'
+            ORDER BY embed_user_query <=> $1::vector ASC, created_at DESC
+            LIMIT $2
+        )
+        SELECT u.payload AS question, f.payload AS trace
+        FROM _match m
+        JOIN {table_name} u ON u.turn_id = m.turn_id AND u.event_type = 'user'
+        JOIN {table_name} f ON f.turn_id = m.turn_id AND f.event_type = 'assistant_final'
+        """
+        rows = await conn.fetch(sql, vec, limit)
+        return [
+            {"question": r["question"], "trace": r["trace"]}
+            for r in rows
+        ]
+
+    async def _fetch_bad_examples(conn, vec, limit: int) -> list:
+        sql = f"""
+        WITH _match AS (
+            SELECT turn_id, reason
+            FROM {table_name}
+            WHERE event_type = 'user'
+              AND valid = false
+              AND created_at >= NOW() - INTERVAL '3 days'
+            ORDER BY embed_user_query <=> $1::vector ASC, created_at DESC
+            LIMIT $2
+        )
+        SELECT u.payload AS question, m.reason AS reason
+        FROM _match m
+        JOIN {table_name} u ON u.turn_id = m.turn_id AND u.event_type = 'user'
+        """
+        rows = await conn.fetch(sql, vec, limit)
+        return [
+            {"question": r["question"], "reason": r["reason"]}
+            for r in rows
+        ]
+
     async def get_memory(query: str) -> list:
+        """
+        Returns up to 3 semantically similar past turns that succeeded
+        (each with its full question + tool-calling/thinking trace, so the
+        model gets real worked examples, not just answers), plus up to 1
+        similar past turn that failed (with its reason, as a "don't do
+        this" example). Each lookup fails independently - a broken query
+        never erases the other one's results.
+        """
+        examples: list = []
         try:
             pool = await get_pool()
             vec = await embed_query_async(query)
 
-            sql = f"""
-            WITH _user AS (
-            SELECT turn_id
-            FROM {table_name}
-            WHERE event_type = 'user'
-                AND created_at >= NOW() - INTERVAL '3 days'
-                AND valid = true
-            ORDER BY embed_user_query <=> $1::vector ASC,
-                     created_at DESC
-            LIMIT 3
-            )
-            SELECT  h.payload
-            FROM _user u
-            JOIN {table_name} h
-            ON h.turn_id = u.turn_id
-            """
-            async with pool.acquire() as conn:
-                rows = await conn.fetch(sql, vec)
-            res = ["Valid examples: "]
-            for row in rows:
-                res.append(str(row).replace('\\', '').replace('  ', ' '))
+            try:
+                async with pool.acquire() as conn:
+                    good = await _fetch_good_examples(conn, vec, limit=3)
+                if good:
+                    examples.append({"valid_examples": good})
+            except Exception:
+                logger.exception("get_memory: valid-example lookup failed")
 
-            sql = f"""
-            WITH _user AS (
-            SELECT turn_id
-            FROM {table_name}
-            WHERE event_type = 'user'
-                AND created_at >= NOW() - INTERVAL '3 days'
-                AND valid = false
-            ORDER BY embed_user_query <=> $1::vector ASC,
-                     created_at DESC
-            LIMIT 1
-            )
-            SELECT  h.payload, h.reason
-            FROM _user u
-            JOIN {table_name} h
-            ON h.turn_id = u.turn_id
-            """
-            async with pool.acquire() as conn:
-                rows = await conn.fetch(sql, vec)
-            res.append("InValid example: ")
-            for row in rows:
-                res.append(str(row).replace('\\', '').replace('  ', ' '))
-
-            return res
+            try:
+                async with pool.acquire() as conn:
+                    bad = await _fetch_bad_examples(conn, vec, limit=1)
+                if bad:
+                    examples.append({"invalid_examples": bad})
+            except Exception:
+                logger.exception("get_memory: invalid-example lookup failed")
 
         except Exception:
-            return []
+            logger.exception("get_memory failed")
+
+        return examples
 
     return HistoryRepo(
         table_name=table_name,
