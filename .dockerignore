@@ -1,0 +1,11 @@
+**/__pycache__
+**/*.pyc
+.git
+.venv
+venv
+*.ipynb
+.pytest_cache
+.mypy_cache
+docker/env/.env.*
+!docker/env/.env.example.*
+.env

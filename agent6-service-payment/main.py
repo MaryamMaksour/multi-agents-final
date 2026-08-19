@@ -11,13 +11,18 @@ from .service import agent_service
 
 from .history_repo_1 import ensure_history_schema
 
-
+from celery_app import celery_app
+from celery.result import AsyncResult
+from tasks.agent_chat import run_payment_chat
+from utils.metrics import setup_metrics
 
 app = FastAPI(
     title="Agentic Sub-code-Agent Service",
     version="1.0.0",
     description="Sub-code-agent microservice for deterministic data retrieval",
 )
+
+setup_metrics(app)
 
 # =====================================================
 # Schemas
@@ -40,6 +45,10 @@ class ResetRequest(BaseModel):
 
 class ResetResponse(BaseModel):
     session_id: str
+    status: str
+
+class AsyncChatAccepted(BaseModel):
+    task_id: str
     status: str
 
 
@@ -83,7 +92,24 @@ async def chat(request: ChatRequest):
         )
 
 
- 
+
+# =====================================================
+# Chat (async, via Celery)
+# =====================================================
+@app.post("/chat/async", response_model=AsyncChatAccepted)
+async def chat_async(request: ChatRequest):
+    """Queue the chat turn as a Celery task instead of awaiting it inline."""
+    task = run_payment_chat.delay(request.session_id, request.user_input, request.context)
+    return AsyncChatAccepted(task_id=task.id, status="queued")
+
+@app.get("/chat/status/{task_id}")
+async def chat_status(task_id: str):
+    result = AsyncResult(task_id, app=celery_app)
+    payload: Dict[str, Any] = {"task_id": task_id, "status": result.status}
+    if result.ready():
+        payload["result"] = result.result if result.successful() else str(result.result)
+    return payload
+
 # =====================================================
 # Streaming Chat (NDJSON)
 # =====================================================

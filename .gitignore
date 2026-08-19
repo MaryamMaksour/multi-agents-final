@@ -1,0 +1,42 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Unit test / coverage
+.pytest_cache/
+.coverage
+
+# Environments
+.env
+docker/env/.env.app
+docker/env/.env.postgres
+docker/env/.env.postgres-exporter
+docker/env/.env.rabbitmq
+docker/env/.env.redis
+docker/env/.env.grafana
+.venv/
+/venv/
+
+# Celery
+celerybeat-schedule*
+celerybeat.pid
+
+# Redis
+*.rdb
+*.aof
+
+# Jupyter
+.ipynb_checkpoints
+
+# IDE
+.idea/
+.vscode/
+
+# Streamlit
+.streamlit/secrets.toml
