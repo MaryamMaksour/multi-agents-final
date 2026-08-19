@@ -2,11 +2,11 @@
 # main/embeddings.py
 import asyncio
 from typing import List
-from langchain_ollama import OllamaEmbeddings
-from main.config import OLLAMA_BASE_URL, EMBED_MODEL
+from langchain_openai import OpenAIEmbeddings
+from main.config import QWEN_API_KEY, QWEN_API_URL, QWEN_EMBED_MODEL
 
 # A single shared embedder (sync implementation underneath)
-embedder = OllamaEmbeddings(model=EMBED_MODEL, base_url=OLLAMA_BASE_URL)
+embedder = OpenAIEmbeddings(model=QWEN_EMBED_MODEL, base_url=QWEN_API_URL, api_key=QWEN_API_KEY)
 
 def vector_to_literal(vec: List[float]) -> str:
     return "[" + ", ".join(str(float(x)) for x in vec) + "]"

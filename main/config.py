@@ -2,15 +2,14 @@
 # main/config.py
 import os
 
-# --- Ollama ---
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://192.168.43.220:11435")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:14b")
-OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.1"))
-OLLAMA_NUM_PREDICT = int(os.getenv("OLLAMA_NUM_PREDICT", "32000"))
-OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "10m")
-OLLAMA_MAX_WINDOW_TOKENS = int(os.getenv("OLLAMA_MAX_WINDOW_TOKENS", "32000"))
+# --- Qwen (DashScope OpenAI-compatible API) ---
+QWEN_API_KEY = os.getenv("QWEN_API_KEY", "")
+QWEN_API_URL = os.getenv("QWEN_API_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
+QWEN_MODEL = os.getenv("QWEN_MODEL", "qwen3-14b")
+QWEN_TEMPERATURE = float(os.getenv("QWEN_TEMPERATURE", "0.1"))
+QWEN_MAX_TOKENS = int(os.getenv("QWEN_MAX_TOKENS", "32000"))
 
-EMBED_MODEL = os.getenv("EMBED_MODEL", "bge-large")
+QWEN_EMBED_MODEL = os.getenv("QWEN_EMBED_MODEL", "text-embedding-v3")
 
 # --- PostgreSQL / pgvector ---
 PG_DBNAME = os.getenv("PG_DBNAME", "Evolution")

@@ -2,15 +2,14 @@
 # This is the single env file shared by all 7 FastAPI services, celery-worker,
 # and flower (they all run from the same image).
 
-# ==================== Ollama / LLM Config ====================
-OLLAMA_BASE_URL=http://192.168.43.220:11435
-OLLAMA_MODEL=qwen3:14b
-OLLAMA_TEMPERATURE=0.1
-OLLAMA_NUM_PREDICT=32000
-OLLAMA_KEEP_ALIVE=10m
-OLLAMA_MAX_WINDOW_TOKENS=32000
+# ==================== Qwen (DashScope OpenAI-compatible API) Config ====================
+QWEN_API_KEY=
+QWEN_API_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+QWEN_MODEL=qwen3-14b
+QWEN_TEMPERATURE=0.1
+QWEN_MAX_TOKENS=32000
 
-EMBED_MODEL=bge-large
+QWEN_EMBED_MODEL=text-embedding-v3
 
 # ==================== PostgreSQL / pgvector Config ====================
 # Must match docker/env/.env.postgres (POSTGRES_USER/PASSWORD/DB below)
