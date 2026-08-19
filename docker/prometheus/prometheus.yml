@@ -9,34 +9,19 @@ scrape_configs:
       - targets: ['agents-service:8000']
     metrics_path: '/TjgR_87vhp_bs8KJ'
 
-  - job_name: 'agent-property'
+  - job_name: 'agent-property-deals'
     static_configs:
-      - targets: ['agent-property:8001']
+      - targets: ['agent-property-deals:8001']
     metrics_path: '/TjgR_87vhp_bs8KJ'
 
-  - job_name: 'agent-hr'
+  - job_name: 'agent-people'
     static_configs:
-      - targets: ['agent-hr:8002']
+      - targets: ['agent-people:8002']
     metrics_path: '/TjgR_87vhp_bs8KJ'
 
-  - job_name: 'agent-crm'
+  - job_name: 'agent-sales-payments'
     static_configs:
-      - targets: ['agent-crm:8003']
-    metrics_path: '/TjgR_87vhp_bs8KJ'
-
-  - job_name: 'agent-deals'
-    static_configs:
-      - targets: ['agent-deals:8004']
-    metrics_path: '/TjgR_87vhp_bs8KJ'
-
-  - job_name: 'agent-sales'
-    static_configs:
-      - targets: ['agent-sales:8006']
-    metrics_path: '/TjgR_87vhp_bs8KJ'
-
-  - job_name: 'agent-payment'
-    static_configs:
-      - targets: ['agent-payment:8007']
+      - targets: ['agent-sales-payments:8003']
     metrics_path: '/TjgR_87vhp_bs8KJ'
 
   - job_name: 'node-exporter'

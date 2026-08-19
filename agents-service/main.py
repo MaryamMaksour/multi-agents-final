@@ -8,7 +8,7 @@ import json
 import asyncio
 
 from .service import agent_service
-from main.history_repo import ensure_history_schema
+from .history_repo import ensure_history_schema
 
 from celery_app import celery_app
 from celery.result import AsyncResult

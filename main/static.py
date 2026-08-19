@@ -12,10 +12,29 @@ domain = [ [],
            [ "developers", "projects", "buildings", "units" ],
            [ "employees", "directors_employees", "hos_employee", "teams", "agents_employee" ],
            [ "customers","customerrequesttrackers",  "customers_deals", ],
-           [ "deals", "deals_units", "deals_projects", "deals_customers", "deals_directors", "deals_agents", "buildings"  ], 
+           [ "deals", "deals_units", "deals_projects", "deals_customers", "deals_directors", "deals_agents", "buildings"  ],
            ["bookings", "paymentlinks", "projects", "buildings", "units", "employees", "agents_employee", "customers", "brokers" ],
            [ "paymentsplits", "payments", "paymentplandetails", "paymentlinks", "onlinepaymenttransactions", "installmentplans", "instalmentadjusted",
               "paymenttermitems", "paymentterms", "projectpaymentplans", "projectpaymentterms" ]]
+
+# ============================================================
+# Consolidated domains (6 sub-agents -> 3)
+# ============================================================
+# Each entry is the deduplicated union of the original per-domain table
+# lists above, grouped by real business cohesion rather than by service
+# count: property+deals (deals are inventory transactions on the same
+# buildings/units/projects), hr+crm (both "who" entities - internal org
+# vs external customers), sales+payment (a booking is the transaction that
+# triggers its payments - the two were already sharing the "Booking" error
+# label before this consolidation, which is a good sign this pairing was
+# always the natural one).
+domain_property_deals = sorted(set(domain[1]) | set(domain[4]))
+domain_people = sorted(set(domain[2]) | set(domain[3]))
+domain_sales_payment = sorted(set(domain[5]) | set(domain[6]))
+
+domain.append(domain_property_deals)   # domain[7]
+domain.append(domain_people)           # domain[8]
+domain.append(domain_sales_payment)    # domain[9]
 
 
 SCHEMA: Dict[str, Dict[str, Any]] = {

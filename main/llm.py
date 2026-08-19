@@ -2,21 +2,16 @@
 # main/llm.py
 from __future__ import annotations
 
-from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 from main.config import (
-    OLLAMA_BASE_URL, OLLAMA_MODEL, OLLAMA_TEMPERATURE,
-    OLLAMA_NUM_PREDICT, OLLAMA_KEEP_ALIVE
+    QWEN_API_KEY, QWEN_API_URL, QWEN_MODEL, QWEN_TEMPERATURE, QWEN_MAX_TOKENS
 )
 
 def get_llm():
-    # ChatOllama supports these params; some go into "options"
-    return ChatOllama(
-        base_url=OLLAMA_BASE_URL,
-        model=OLLAMA_MODEL,
-        temperature=OLLAMA_TEMPERATURE,
-        keep_alive=OLLAMA_KEEP_ALIVE,
-        # Ollama generation options:
-        options={
-            "num_predict": OLLAMA_NUM_PREDICT,
-        },
+    return ChatOpenAI(
+        base_url=QWEN_API_URL,
+        api_key=QWEN_API_KEY,
+        model=QWEN_MODEL,
+        temperature=QWEN_TEMPERATURE,
+        max_tokens=QWEN_MAX_TOKENS,
     )

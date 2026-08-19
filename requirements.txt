@@ -4,13 +4,16 @@ uvicorn[standard]==0.32.1
 pydantic==2.10.3
 python-dotenv==1.0.1
 
+# Shared sub-agent scaffolding (local installable package, see agent_common/)
+./agent_common
+
 # HTTP clients (used by orchestrator -> sub-agent calls)
 httpx==0.28.1
 requests==2.32.3
 
 # Agent / LLM stack
 langchain-core==0.3.28
-langchain-ollama==0.2.2
+langchain-openai==0.2.14
 langgraph==0.2.60
 
 # Tracing / observability (agent instrumentation)

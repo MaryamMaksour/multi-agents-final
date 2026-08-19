@@ -18,7 +18,7 @@ from phoenix.otel import register
 from .running_agent import run_agent_with_history, make_human_message
 
 from main.config import MAX_SESSION_MESSAGES
-from main.history_repo import new_turn_id, log_user_message, log_assistant_final
+from .history_repo import new_turn_id, log_user_message, log_assistant_final
 from main.pipeline_utils import extract_pipeline_main
 
 logger = logging.getLogger(__name__)

@@ -7,7 +7,7 @@ from typing import Optional
 import asyncpg
 from pgvector.asyncpg import register_vector
 
-from .config import PG_HOST, PG_PORT, PG_DBNAME, PG_USER, PG_PASSWORD, PG_SSL
+from .config import PG_HOST, PG_PORT, PG_DBNAME, PG_USER, PG_PASSWORD, PG_SSL, DB_POOL_MIN, DB_POOL_MAX
 import os
 
 logger = logging.getLogger(__name__)
@@ -39,26 +39,23 @@ async def get_pool() -> asyncpg.Pool:
                PG_HOST, PG_PORT, PG_DBNAME, PG_USER, PG_SSL)
 
 '''
-    try:
-        host = _clean_host(PG_HOST)
-        port = int(PG_PORT)
+    host = _clean_host(PG_HOST)
+    port = int(PG_PORT)
 
-        logger.info("Connecting to Postgres host=%r port=%r db=%r user=%r ssl=%r",
-                    host, port, PG_DBNAME, PG_USER, PG_SSL)
+    logger.info("Connecting to Postgres host=%r port=%r db=%r user=%r ssl=%r pool=%d..%d",
+                host, port, PG_DBNAME, PG_USER, PG_SSL, DB_POOL_MIN, DB_POOL_MAX)
 
-        _POOL = await asyncpg.create_pool(
-            host=host,
-            port=port,
-            user=PG_USER,
-            password=PG_PASSWORD,
-            database=PG_DBNAME,
-            ssl=PG_SSL if PG_SSL else None,
-            min_size=1,
-            max_size=10,
-        )
-        return _POOL
-    except Exception as e:
-        return e
+    _POOL = await asyncpg.create_pool(
+        host=host,
+        port=port,
+        user=PG_USER,
+        password=PG_PASSWORD,
+        database=PG_DBNAME,
+        ssl=PG_SSL if PG_SSL else None,
+        min_size=DB_POOL_MIN,
+        max_size=DB_POOL_MAX,
+    )
+    return _POOL
 
 
 async def close_pool() -> None:
