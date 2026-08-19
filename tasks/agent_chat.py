@@ -2,7 +2,10 @@
 #
 # Thin Celery adapter around each service's existing `agent_service.achat(...)`.
 # No agent/orchestration/tool logic lives here - each task just imports the
-# unmodified `agent_service` object from its service package and awaits it.
+# `agent_service` object from its service package and awaits it. For the 6
+# sub-agent services that object is built by agent_config.py (wiring the
+# shared agent_common package to this domain's tools/prompt); the
+# orchestrator still builds its own in service.py.
 #
 # Service package names contain hyphens (e.g. "agents-service"), which are not
 # valid Python identifiers, so they must be loaded with importlib.import_module
@@ -16,12 +19,12 @@ from celery_app import celery_app
 
 _SERVICE_MODULES = {
     "orchestrator": "agents-service.service",
-    "property": "agent1-service-property.service",
-    "hr": "agent2-service-HR.service",
-    "crm": "agent3-service-CRM.service",
-    "deals": "agent4-service-deals.service",
-    "sales": "agent5-service-sales.service",
-    "payment": "agent6-service-payment.service",
+    "property": "agent1-service-property.agent_config",
+    "hr": "agent2-service-HR.agent_config",
+    "crm": "agent3-service-CRM.agent_config",
+    "deals": "agent4-service-deals.agent_config",
+    "sales": "agent5-service-sales.agent_config",
+    "payment": "agent6-service-payment.agent_config",
 }
 
 

@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
+COPY agent_common/ ./agent_common/
 
 RUN uv pip install -r requirements.txt --system
 
