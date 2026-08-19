@@ -76,7 +76,7 @@ async def chat(request: ChatRequest):
         return ChatResponse(
             session_id=request.session_id,
             answer=answer,
-            history_length=agent_service.history_length(request.session_id),
+            history_length=await agent_service.history_length(request.session_id),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")

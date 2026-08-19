@@ -119,9 +119,12 @@ def _ensure_select_only(sql: str):
     if "select *" in low or ".*" in low:
         result += "select * Not allowed list only columns needed or use column row_txt insted and re-run the tool."
 
+    # Scans the WHOLE query, not just up to the first "from" - a query with
+    # a subquery in its select-list (e.g. "select (select id from x where
+    # embed_name is not null limit 1) from y") hits an inner "from" first,
+    # and stopping there would let an embed_* reference appearing after it
+    # slip through unchecked.
     for w in low.split():
-        if w == "from":
-            break
         if w[:6] == "embed_" or w[2:8] == "embed_" or w == "embedding":
             result += "You can not return any embed column in select, delete it and re-run the tool again"
             break
@@ -268,50 +271,65 @@ def build_domain_tools(allowed_tables: List[str], log_sql_query: Callable[..., A
                 state = decode_cursor(cursor)
                 offset = state["offset"]
                 query = state["query"]
+                # The cursor's saved resolved_params are the PREVIOUS page's
+                # params - its last element (the offset placeholder) is the
+                # old offset, not the new one, so it has to be corrected to
+                # the freshly-decoded offset. Without this the query would
+                # just re-run the same page forever.
+                params = list(state.get("resolved_params", params))
+                if params:
+                    params[-1] = offset
+                count_query = state.get("count_query", count_query)
+                count_params = state.get("count_params", count_params)
             else:
                 offset = 0
 
             query = _ensure_select_only(query)
             if type(query) is not str:
-                return f"error {query}"
+                return {"error": str(query)}
 
             table_err = _check_tables_allowed(query, allowed_set)
             if table_err:
-                return f"error {table_err}"
+                return {"error": table_err}
 
             count_query = _ensure_select_only(count_query)
             if type(count_query) is not str:
-                return f"error {count_query}"
+                return {"error": str(count_query)}
 
             count_table_err = _check_tables_allowed(count_query, allowed_set)
             if count_table_err:
-                return f"error {count_table_err}"
+                return {"error": count_table_err}
 
-            query = query.lower()
-            if "limit $" not in query:
-                return "error limit $n should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"
+            # Only used for the LIMIT/OFFSET placeholder presence check below -
+            # `query` itself must keep its original case, since it's what
+            # actually executes; lowercasing it here used to silently corrupt
+            # every case-sensitive string literal in the query (e.g.
+            # WHERE status = 'Active' silently became 'active').
+            query_check = query.lower()
+            if "limit $" not in query_check:
+                return {"error": "limit $n should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"}
 
-            if "offset $" not in query:
-                return "error offset $n should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"
+            if "offset $" not in query_check:
+                return {"error": "offset $n should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"}
 
             if len(params) >= 2:
                 if int(params[-2]) > 100:
-                    return "error, limit should be less than 100"
+                    return {"error": "limit should be less than 100"}
                 if int(params[-1]) > MAX_OFFSET:
-                    return f"error, offset should be less than {MAX_OFFSET}"
+                    return {"error": f"offset should be less than {MAX_OFFSET}"}
             else:
-                return "error offset and limit should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"
+                return {"error": "offset and limit should be in the query in this shape  limit &n offset &m, and params = [..,&n_value, &m_value]"}
 
             resolved_params = []
             for p in params:
                 if isinstance(p, str) and p.startswith("vec_"):
-                    p = get_vector(p)
+                    p = await get_vector(p)
                 resolved_params.append(p)
 
             resolved_count_params = []
             for p in count_params:
                 if isinstance(p, str) and p.startswith("vec_"):
-                    p = get_vector(p)
+                    p = await get_vector(p)
                 resolved_count_params.append(p)
 
             pool = await get_pool()
@@ -331,7 +349,9 @@ def build_domain_tools(allowed_tables: List[str], log_sql_query: Callable[..., A
                         next_cursor = encode_cursor({
                             "offset": next_offset,
                             "resolved_params": resolved_params,
-                            "query": query
+                            "query": query,
+                            "count_query": count_query,
+                            "count_params": resolved_count_params,
                         })
 
                     if session_id and turn_id:
@@ -352,7 +372,7 @@ def build_domain_tools(allowed_tables: List[str], log_sql_query: Callable[..., A
                             "next_cursor": next_cursor}
 
                 except Exception as e:
-                    return f"error {e}"
+                    return {"error": str(e)}
 
         except Exception as e:
             error_msg = str(e)
@@ -387,18 +407,14 @@ def build_domain_tools(allowed_tables: List[str], log_sql_query: Callable[..., A
                             "next_cursor": next_cursor} }
         """
         try:
-            state = decode_cursor(cursor)
-            query = state["query"]
-            offset = state["offset"]
-            params = state["resolved_params"]
-            params[-1] = offset  # Assuming the last parameter is the offset for pagination
-
-            count_query = ""  # Placeholder
-            count_params = []  # Placeholder
-
+            # db_execute's own cursor branch now does all the state
+            # restoration (query, offset, params correction, count_query/
+            # count_params) - this is a thin, single-source-of-truth
+            # wrapper around it rather than a second, divergent
+            # implementation of the same decode-and-correct logic.
             return await db_execute.ainvoke({
-                "query": query, "params": params, "offset": offset,
-                "count_query": count_query, "count_params": count_params, "cursor": None,
+                "query": "", "params": [], "offset": 0,
+                "count_query": "", "count_params": [], "cursor": cursor,
             })
 
         except Exception as e:
@@ -409,7 +425,7 @@ def build_domain_tools(allowed_tables: List[str], log_sql_query: Callable[..., A
     async def embed_query_tool(query: str):
         "convert any value to vector use it when need to do semantic search in db_execute (every column value saperated)"
         embed = await embed_query_async(query)
-        token = store_vector(embed)
+        token = await store_vector(embed)
         return {"vector_token": token}
 
     @tool

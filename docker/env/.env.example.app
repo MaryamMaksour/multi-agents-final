@@ -23,9 +23,15 @@ PG_SSL=false
 
 DIST_OP=<=>
 
+# ==================== Redis (app session/vector state - separate DB index
+# from Celery's own broker/backend below, to keep key spaces apart) ====================
+# Must match docker/env/.env.redis's REDIS_PASSWORD
+REDIS_URL=redis://:changeme@redis:6379/1
+
 # ==================== Tool limits ====================
 MAX_PAGES_PER_TOOL=5
 MAX_SESSION_MESSAGES=40
+CONTEXT_MESSAGES_SENT=20
 DB_POOL_MIN=1
 DB_POOL_MAX=10
 DB_COMMAND_TIMEOUT=60
