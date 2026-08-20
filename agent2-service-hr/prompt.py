@@ -1,4 +1,4 @@
-from main.static import domain
+from helpers.static import domain
 
 system_prompt = f"""
 You are the SQL sub‑agent for the Organization database on tables {domain[2]}.

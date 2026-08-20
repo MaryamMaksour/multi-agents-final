@@ -12,11 +12,11 @@ from operator import add as add_messages
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import BaseMessage, SystemMessage, ToolMessage, HumanMessage
 
-from main.llm import get_llm
+from stores.llm import get_chat_model
 from .agent_tools import get_tools, get_tools_dict
 from .prompt import system_prompt
 from .history_repo import log_tool_call, get_memory
-from main.config import MAX_PAGES_PER_TOOL
+from helpers.config import MAX_PAGES_PER_TOOL
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ def _last_user_text(state: AgentState) -> str:
 # LLM + Tools
 # ============================================================
 
-llm = get_llm().bind_tools(get_tools())
+llm = get_chat_model().bind_tools(get_tools())
 tools_dict = get_tools_dict()
 
 

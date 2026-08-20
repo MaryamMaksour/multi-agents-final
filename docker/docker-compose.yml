@@ -4,10 +4,10 @@ services:
   # All 5 services share one image (docker/app/Dockerfile); only the uvicorn
   # module path and port differ per service.
   #
-  # Sub-agents are built with agent_common's factory (agent_common/factory.py)
+  # Sub-agents are built with src/controllers/factory.py's create_sub_agent()
   # from a per-domain ProviderSpec (see each agentN-service-*/provider.py):
   # property, hr, crm, and sales+payments (deals has no provider yet - see
-  # main/static.py's domain[1..3] and domain[7]).
+  # src/helpers/static.py's domain[1..3] and domain[7]).
   #
   # The orchestrator is the only service published to the host. Sub-agents
   # use `expose:` (network-internal only) instead of `ports:` - nothing

@@ -1,8 +1,8 @@
 # agent3-service-crm/provider.py
-from agent_common.factory import create_sub_agent
-from agent_common.provider import ProviderSpec
+from controllers.factory import create_sub_agent
+from controllers.provider import ProviderSpec
 
-from main.static import domain
+from helpers.static import domain
 
 from .prompt import system_prompt
 

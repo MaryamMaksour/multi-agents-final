@@ -4,8 +4,12 @@ This directory contains the Docker setup for the multi-agent application: the
 orchestrator (`agents-service`) and its four domain sub-agents, plus the
 full observability stack.
 
-Each sub-agent is built from `agent_common`'s factory (`agent_common/factory.py`)
-out of a small per-domain `ProviderSpec` (see each `agentN-service-*/provider.py`).
+Source lives in `src/` (`controllers/`, `routes/`, `stores/`, `helpers/`,
+`utils/`, `assets/` - same layout as mini_rag). Each sub-agent is built
+from `controllers/factory.py`'s `create_sub_agent()` out of a small
+per-domain `ProviderSpec` (see each `agentN-service-*/provider.py`).
+Those service directories stay independently deployable - adding or
+removing an agent only touches its own directory, not `src/`.
 
 ## Services
 
@@ -26,7 +30,7 @@ orchestrator (and its own domain-scoped tool set).
 - **Prometheus**: Metrics collection
 - **Grafana**: Visualization dashboard for metrics
 - **Node-Exporter**: System metrics collection
-- **Redis**: App-level session/vector-token state (see `main/redis_client.py`)
+- **Redis**: App-level session/vector-token state (see `src/stores/cache/`)
 
 ## Setup Instructions
 
@@ -86,7 +90,7 @@ docker compose down -v --remove-orphans
 ## SQL safety
 
 `db_execute` (the tool each sub-agent uses to run LLM-authored SQL) is
-validated with `agent_common/sql_validation.py` - a real SQL parser
+validated with `src/controllers/sql_validation.py` - a real SQL parser
 (sqlglot), not regex: single SELECT/WITH/UNION statement only, no
 `embed_*`/`embedding` columns anywhere in the query, no tables outside
 the calling agent's domain, no filesystem/administrative function calls.

@@ -1,4 +1,4 @@
-from main.static import domain
+from helpers.static import domain
 
 system_prompt = f"""
 ROLE  

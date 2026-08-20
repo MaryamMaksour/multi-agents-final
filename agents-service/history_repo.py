@@ -4,9 +4,9 @@
 # main/history_repo.py - same implementation as every sub-agent's
 # history_repo_1.py had, just never deduplicated because the orchestrator
 # wasn't in scope of the first extraction pass. Binds the shared,
-# bug-fixed agent_common implementation to this service's own table
-# instead of maintaining a third copy.
-from agent_common.history_repo import build_history_repo
+# bug-fixed controllers/history_repo.py implementation to this service's
+# own table instead of maintaining a third copy.
+from controllers.history_repo import build_history_repo
 
 history_repo = build_history_repo(table_name="history_orchestrator")
 

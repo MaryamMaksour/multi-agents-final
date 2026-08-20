@@ -1,6 +1,6 @@
 
 # agent3-service-crm/main.py
-from agent_common.app import create_agent_app
+from routes.agent_app import create_agent_app
 
 from .provider import config
 

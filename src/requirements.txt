@@ -1,0 +1,39 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+python-dotenv==1.0.1
+
+# HTTP clients (used by orchestrator -> sub-agent calls)
+httpx==0.28.1
+requests==2.32.3
+
+# Agent / LLM stack
+langchain-core==0.3.28
+langchain-openai==0.2.14
+langgraph==0.2.60
+
+# Tracing / observability (agent instrumentation)
+openinference-instrumentation-langchain==0.1.29
+arize-phoenix==7.7.0
+# Pinned explicitly: arize-phoenix==7.7.0 only declares arize-phoenix-evals>=0.13.1
+# with no upper bound, but evals>=3.0 restructured phoenix.evals and breaks
+# arize-phoenix's own `from phoenix.evals.models.rate_limiters import RateLimiter`.
+arize-phoenix-evals==0.20.8
+
+# Database (self-hosted Postgres/pgvector)
+asyncpg==0.30.0
+pgvector==0.3.6
+
+# SQL AST validation for db_execute (real parser instead of regex/token-scan)
+sqlglot==30.17.0
+
+# Operator UI
+streamlit==1.40.2
+
+# Redis (app-level session/vector-token state - see stores/cache/)
+redis==5.2.1
+
+# Monitoring and metrics
+prometheus-client==0.21.1
+starlette-exporter==0.23.0

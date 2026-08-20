@@ -1,6 +1,6 @@
 -- Least-privilege Postgres roles, one per sub-agent provider.
 --
--- Defense in depth for the SQL validation in agent_common/sql_validation.py:
+-- Defense in depth for the SQL validation in controllers/sql_validation.py:
 -- that check parses every query's AST and rejects anything outside a
 -- domain's table list, but it's still application code. A role that
 -- physically cannot see another domain's tables means an app-layer bug
@@ -10,7 +10,7 @@
 -- role), then point each service's PG_USER/PG_PASSWORD at its own role -
 -- see the notes at the bottom for wiring that into docker-compose.
 --
--- Table lists below match main/static.py's domain[1], domain[2], domain[3],
+-- Table lists below match helpers/static.py's domain[1], domain[2], domain[3],
 -- domain[7] at the time this was written - if you add tables to a domain
 -- there, add the matching GRANT here too.
 
@@ -23,10 +23,10 @@ GRANT SELECT ON TABLE
     developers, projects, buildings, units
 TO app_property;
 
--- Its own history table (created by agent_common.history_repo on startup,
+-- Its own history table (created by controllers.history_repo on startup,
 -- so this GRANT needs to run *after* the service has started at least
 -- once and created history_property - or pre-create the table yourself
--- using the CREATE TABLE in agent_common/history_repo.py).
+-- using the CREATE TABLE in controllers/history_repo.py).
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE history_property TO app_property;
 GRANT USAGE, SELECT ON SEQUENCE history_property_id_seq TO app_property;
 
@@ -83,7 +83,7 @@ GRANT USAGE, SELECT ON SEQUENCE history_orchestrator_id_seq TO app_orchestrator;
 
 -- ============================================================
 -- Optional: a Postgres-level guard against runaway queries, on top of
--- the app-layer MAX_OFFSET/limit<=100 checks in agent_common/tools.py.
+-- the app-layer MAX_OFFSET/limit<=100 checks in controllers/tools.py.
 -- ============================================================
 ALTER ROLE app_property SET statement_timeout = '30s';
 ALTER ROLE app_hr SET statement_timeout = '30s';
