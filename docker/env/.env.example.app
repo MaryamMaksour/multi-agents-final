@@ -1,7 +1,7 @@
 # Copy this file to docker/env/.env.app and fill in real values.
-# This is the single env file shared by all 4 FastAPI services (orchestrator
-# + 3 consolidated domain sub-agents), celery-worker, and flower (they all
-# run from the same image).
+# This is the single env file shared by all 5 FastAPI services (orchestrator
+# + 4 domain sub-agents: property, hr, crm, sales+payments - they all run
+# from the same image).
 
 # ==================== Qwen (DashScope OpenAI-compatible API) Config ====================
 QWEN_API_KEY=
@@ -23,27 +23,23 @@ PG_SSL=false
 
 DIST_OP=<=>
 
+# ==================== Redis (app-level session/vector-token state) ====================
+# Must match docker/env/.env.redis's REDIS_PASSWORD
+REDIS_URL=redis://:changeme@redis:6379/1
+
 # ==================== Tool limits ====================
 MAX_PAGES_PER_TOOL=5
 MAX_SESSION_MESSAGES=40
+CONTEXT_MESSAGES_SENT=20
 DB_POOL_MIN=1
 DB_POOL_MAX=10
 DB_COMMAND_TIMEOUT=60
 
 # ==================== Sub-agent URLs (used by agents-service/agent_tools.py) ====================
-PROPERTY_DEALS_AGENT_URL=http://agent-property-deals:8001/chat
-PEOPLE_AGENT_URL=http://agent-people:8002/chat
-SALES_PAYMENTS_AGENT_URL=http://agent-sales-payments:8003/chat
+PROPERTY_AGENT_URL=http://agent-property:8001/chat
+HR_AGENT_URL=http://agent-hr:8002/chat
+CRM_AGENT_URL=http://agent-crm:8003/chat
+SALES_PAYMENTS_AGENT_URL=http://agent-sales-payments:8004/chat
 
 TOOLS_HTTP_TIMEOUT_SECS=60
 DEFAULT_TOOL_SESSION_ID=agents:subsession
-
-# ==================== Celery Task Queue Config ====================
-# Must match docker/env/.env.rabbitmq and docker/env/.env.redis below
-CELERY_BROKER_URL=amqp://agents_user:changeme@rabbitmq:5672/agents_vhost
-CELERY_RESULT_BACKEND=redis://:changeme@redis:6379/0
-CELERY_TASK_SERIALIZER=json
-CELERY_TASK_TIME_LIMIT=3600
-CELERY_TASK_ACKS_LATE=true
-CELERY_WORKER_CONCURRENCY=4
-CELERY_FLOWER_PASSWORD=

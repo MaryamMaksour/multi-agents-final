@@ -2,14 +2,13 @@
 # service.py
 from __future__ import annotations
 
-from threading import RLock
 from typing import Any, Dict, Optional, List
 import json
 import os
 import logging
 import time
 
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, messages_from_dict, messages_to_dict
 
 from openinference.instrumentation.langchain import LangChainInstrumentor
 import phoenix as px
@@ -17,7 +16,8 @@ from phoenix.otel import register
 
 from .running_agent import run_agent_with_history, make_human_message
 
-from main.config import MAX_SESSION_MESSAGES
+from main.config import MAX_SESSION_MESSAGES, CONTEXT_MESSAGES_SENT
+from main.redis_client import get_redis
 from .history_repo import new_turn_id, log_user_message, log_assistant_final
 from main.pipeline_utils import extract_pipeline_main
 
@@ -46,37 +46,48 @@ if ENABLE_PHOENIX:
 
 '''
 # ------------------------------------------------------------
-# Conversation store (sessionized, thread-safe)
+# Conversation store (Redis-backed, sessionized)
 # ------------------------------------------------------------
+# Was a plain process-local dict - each FastAPI replica held its own,
+# independent ConversationStore with nothing shared between them. A
+# session_id routed to two different replicas would silently see two
+# different conversation histories. Redis gives any number of replicas
+# one shared source of truth.
+_SESSION_TTL_SECONDS = 60 * 60 * 24 * 3  # 3 days
+
+
 class ConversationStore:
     def __init__(self, max_messages: int = 8):
-        self._histories: Dict[str, List[BaseMessage]] = {}
-        self._lock = RLock()
         self._max_messages = max_messages
 
-    def get_history(self, session_id: str) -> List[BaseMessage]:
-        with self._lock:
-            return self._histories.setdefault(session_id, [])
+    def _key(self, session_id: str) -> str:
+        return f"conversation:{session_id}"
 
-    def append(self, session_id: str, messages: List[BaseMessage]) -> None:
+    async def get_history(self, session_id: str) -> List[BaseMessage]:
+        raw = await get_redis().get(self._key(session_id))
+        if not raw:
+            return []
+        return messages_from_dict(json.loads(raw))
+
+    async def append(self, session_id: str, messages: List[BaseMessage]) -> None:
         """Append a batch of messages and enforce the max window."""
-        with self._lock:
-            hist = self._histories.setdefault(session_id, [])
-            hist.extend(messages)
-            if len(hist) > self._max_messages:
-                self._histories[session_id] = hist[-self._max_messages :]
+        if not messages:
+            return
+        hist = await self.get_history(session_id)
+        hist.extend(messages)
+        if len(hist) > self._max_messages:
+            hist = hist[-self._max_messages:]
+        await get_redis().set(
+            self._key(session_id),
+            json.dumps(messages_to_dict(hist)),
+            ex=_SESSION_TTL_SECONDS,
+        )
 
-    # (Optional convenience) allow single-message append
-    def append_one(self, session_id: str, message: BaseMessage) -> None:
-        self.append(session_id, [message])
+    async def reset(self, session_id: str) -> None:
+        await get_redis().delete(self._key(session_id))
 
-    def reset(self, session_id: str) -> None:
-        with self._lock:
-            self._histories[session_id] = []
-
-    def size(self, session_id: str) -> int:
-        with self._lock:
-            return len(self._histories.get(session_id, []))
+    async def size(self, session_id: str) -> int:
+        return len(await self.get_history(session_id))
 
 
 conversation_store = ConversationStore(max_messages=MAX_SESSION_MESSAGES)
@@ -180,52 +191,72 @@ class AgentService:
         if user_input is None or (isinstance(user_input, str) and not user_input.strip()):
             return {"error": "invalid_user_input"}
 
-        # 1) New turn + envelope + log
-        turn_id = new_turn_id()
-        envelope = self._build_envelope(user_input, session_id, turn_id, context)
-
-        # 2) Persist user message (enforced trim via store)
-        user_msg = make_human_message(envelope)
-        self.store.append(session_id, [user_msg])
-
-        # 3) Log user turn (DB/analytics)
-        try:
-            await log_user_message(session_id, turn_id, user_input, context)
-        except Exception as e:
-            logger.warning("log_user_message failed: %s", e)
-
-        # 4) Run agent on the last N messages (keep short context)
-        history = self.store.get_history(session_id)
-        started_at = time.time()
-        result = await run_agent_with_history(history[-5:])
-        elapsed = time.time() - started_at
-
-        
-
-        # 5) Persist agent messages into the session history
-        agent_messages = result.get("messages") or []
-
-        self.store.append(session_id, agent_messages)
-
-        steps = extract_pipeline_main(agent_messages) or []
-
-        # 7) Return a JSON-safe final payload
-        final_answer = self._extract_final_content(result)
-
-        metadata = self._extract_metadata(result)
+        # Serializes turns for the same session: without this, two
+        # overlapping requests for the same session_id (double-click,
+        # multiple tabs) could both read the same starting history, run
+        # concurrently, and append their results in a nondeterministic
+        # order. A Redis lock (not just an in-process one) is needed since
+        # /chat and /chat/async can run this in different processes.
+        lock = get_redis().lock(f"conversation-lock:{session_id}", timeout=120, blocking_timeout=30)
+        acquired = await lock.acquire()
+        if not acquired:
+            return {"error": "session_busy_try_again"}
 
         try:
-            await log_assistant_final(session_id, turn_id, {"user_question ": user_input , "final_answer": steps}, str(elapsed))
-        except Exception as e:
-            logger.warning("log_assistant_final failed: %s", e)
+            # 1) New turn + envelope + log
+            turn_id = new_turn_id()
+            envelope = self._build_envelope(user_input, session_id, turn_id, context)
 
-        return {"final_answer":final_answer,  "metadata": metadata}
+            # 2) Persist user message (enforced trim via store)
+            user_msg = make_human_message(envelope)
+            await self.store.append(session_id, [user_msg])
+
+            # 3) Log user turn (DB/analytics)
+            try:
+                await log_user_message(session_id, turn_id, user_input, context)
+            except Exception as e:
+                logger.warning("log_user_message failed: %s", e)
+
+            # 4) Run agent on the last CONTEXT_MESSAGES_SENT messages - a
+            # separate knob from MAX_SESSION_MESSAGES (which controls how
+            # much is *retained*): a single turn already spans several
+            # messages (human -> AI tool-call -> tool result -> ... ->
+            # final AI), so a small fixed slice here was cutting off the
+            # model's own current-turn tool trace, let alone prior turns.
+            history = await self.store.get_history(session_id)
+            started_at = time.time()
+            result = await run_agent_with_history(history[-CONTEXT_MESSAGES_SENT:])
+            elapsed = time.time() - started_at
+
+            # 5) Persist agent messages into the session history
+            agent_messages = result.get("messages") or []
+
+            await self.store.append(session_id, agent_messages)
+
+            steps = extract_pipeline_main(agent_messages) or []
+
+            # 7) Return a JSON-safe final payload
+            final_answer = self._extract_final_content(result)
+
+            metadata = self._extract_metadata(result)
+
+            try:
+                await log_assistant_final(session_id, turn_id, {"user_question ": user_input, "final_answer": steps}, str(elapsed))
+            except Exception as e:
+                logger.warning("log_assistant_final failed: %s", e)
+
+            return {"final_answer": final_answer, "metadata": metadata}
+        finally:
+            try:
+                await lock.release()
+            except Exception:
+                pass
 
     async def areset(self, session_id: str) -> None:
-        self.store.reset(session_id)
+        await self.store.reset(session_id)
 
-    def history_length(self, session_id: str) -> int:
-        return self.store.size(session_id)
+    async def history_length(self, session_id: str) -> int:
+        return await self.store.size(session_id)
 
 
 agent_service = AgentService(conversation_store)

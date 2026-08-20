@@ -12,9 +12,10 @@ from langchain_core.tools import tool
 # -------------------------------------------------------------------
 # Config (allow override via env; keep your current defaults)
 # -------------------------------------------------------------------
-PROPERTY_DEALS_AGENT_URL = os.getenv("PROPERTY_DEALS_AGENT_URL", "http://localhost:8001/chat")
-PEOPLE_AGENT_URL = os.getenv("PEOPLE_AGENT_URL", "http://localhost:8002/chat")
-SALES_PAYMENTS_AGENT_URL = os.getenv("SALES_PAYMENTS_AGENT_URL", "http://localhost:8003/chat")
+PROPERTY_AGENT_URL = os.getenv("PROPERTY_AGENT_URL", "http://localhost:8001/chat")
+HR_AGENT_URL = os.getenv("HR_AGENT_URL", "http://localhost:8002/chat")
+CRM_AGENT_URL = os.getenv("CRM_AGENT_URL", "http://localhost:8003/chat")
+SALES_PAYMENTS_AGENT_URL = os.getenv("SALES_PAYMENTS_AGENT_URL", "http://localhost:8004/chat")
 
 DEFAULT_TIMEOUT = int(os.getenv("TOOLS_HTTP_TIMEOUT_SECS", "60"))
 DEFAULT_SESSION = os.getenv("DEFAULT_TOOL_SESSION_ID", "agents:subsession")
@@ -63,7 +64,7 @@ def _build_payload(
 # (with its own scoped, table-allowlisted db_execute) resumes from there.
 
 @tool
-async def property_deals_TOOL(
+async def property_TOOL(
     query: str,
     cursor: Optional[str] = None,
     session_id: str = DEFAULT_SESSION,
@@ -71,8 +72,7 @@ async def property_deals_TOOL(
     timeout: int = DEFAULT_TIMEOUT,
 ) -> Any:
     """
-    Delegate property and deals related queries (developers, projects, buildings,
-    units, and the deals built on them)
+    Delegate property-related queries (developers, projects, buildings, units)
     Inputs:
       - query: natural language question
       - cursor: next page token (opaque)
@@ -87,19 +87,19 @@ async def property_deals_TOOL(
       }
     """
     if not isinstance(query, str) or not query.strip():
-        return {"error": "property_deals_service_error: missing_or_invalid_query"}
+        return {"error": "property_service_error: missing_or_invalid_query"}
 
     payload = _build_payload(query, cursor, session_id, turn_id)
 
     try:
-        return await _post_json(PROPERTY_DEALS_AGENT_URL, payload, timeout)
+        return await _post_json(PROPERTY_AGENT_URL, payload, timeout)
 
     except Exception as e:
-        return {"error": f"property_deals_service_error: {e}"}
+        return {"error": f"property_service_error: {e}"}
 
 
 @tool
-async def people_TOOL(
+async def hr_TOOL(
     query: str,
     cursor: Optional[str] = None,
     session_id: str = DEFAULT_SESSION,
@@ -107,9 +107,8 @@ async def people_TOOL(
     timeout: int = DEFAULT_TIMEOUT,
 ) -> Any:
     """
-    Delegate people-related queries: internal organization (employees, heads
-    of sales, directors, teams, agents) and external CRM (customers,
-    customer request trackers)
+    Delegate HR / internal organization queries (employees, heads of sales,
+    directors, teams, agents, brokers)
     Inputs:
       - query: natural language question
       - cursor: next page token (opaque)
@@ -124,15 +123,51 @@ async def people_TOOL(
       }
     """
     if not isinstance(query, str) or not query.strip():
-        return {"error": "people_service_error: missing_or_invalid_query"}
+        return {"error": "hr_service_error: missing_or_invalid_query"}
 
     payload = _build_payload(query, cursor, session_id, turn_id)
 
     try:
-        return await _post_json(PEOPLE_AGENT_URL, payload, timeout)
+        return await _post_json(HR_AGENT_URL, payload, timeout)
 
     except Exception as e:
-        return {"error": f"people_service_error: {e}"}
+        return {"error": f"hr_service_error: {e}"}
+
+
+@tool
+async def crm_TOOL(
+    query: str,
+    cursor: Optional[str] = None,
+    session_id: str = DEFAULT_SESSION,
+    turn_id: Optional[str] = None,
+    timeout: int = DEFAULT_TIMEOUT,
+) -> Any:
+    """
+    Delegate CRM queries: external customers, customer deals, and customer
+    request trackers
+    Inputs:
+      - query: natural language question
+      - cursor: next page token (opaque)
+    Returns (normalized):
+      {
+        "sql": [...], # SQL query the sup agent run it
+        "params" : [], # paramas for sql
+        "data" [], # rows
+        "has_more": bool,
+        "next_cursor": str,
+
+      }
+    """
+    if not isinstance(query, str) or not query.strip():
+        return {"error": "crm_service_error: missing_or_invalid_query"}
+
+    payload = _build_payload(query, cursor, session_id, turn_id)
+
+    try:
+        return await _post_json(CRM_AGENT_URL, payload, timeout)
+
+    except Exception as e:
+        return {"error": f"crm_service_error: {e}"}
 
 
 @tool
@@ -172,7 +207,7 @@ async def sales_payments_TOOL(
 
 
 # Exports
-tools = [property_deals_TOOL, people_TOOL, sales_payments_TOOL]
+tools = [property_TOOL, hr_TOOL, crm_TOOL, sales_payments_TOOL]
 tools_dict = {tool.name: tool for tool in tools}
 
 

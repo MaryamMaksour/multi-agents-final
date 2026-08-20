@@ -1,12 +1,13 @@
 services:
 
   # ===================== Orchestrator + Sub-agent FastAPI services =====================
-  # All 4 services share one image (docker/app/Dockerfile); only the uvicorn
-  # module path and port differ per service, same as mini_rag's single-image
-  # pattern where fastapi/celery-worker/celery-beat/flower reuse one build.
+  # All 5 services share one image (docker/app/Dockerfile); only the uvicorn
+  # module path and port differ per service.
   #
-  # Scaled down from 6 domain sub-agents to 3 (property+deals, people,
-  # sales+payments - see agent_common and main/static.py's domain[7..9]).
+  # Sub-agents are built with agent_common's factory (agent_common/factory.py)
+  # from a per-domain ProviderSpec (see each agentN-service-*/provider.py):
+  # property, hr, crm, and sales+payments (deals has no provider yet - see
+  # main/static.py's domain[1..3] and domain[7]).
   #
   # The orchestrator is the only service published to the host. Sub-agents
   # use `expose:` (network-internal only) instead of `ports:` - nothing
@@ -30,11 +31,11 @@ services:
         condition: service_healthy
     command: ["uvicorn", "agents-service.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
-  agent-property-deals:
+  agent-property:
     build:
       context: ..
       dockerfile: docker/app/Dockerfile
-    container_name: agent-property-deals
+    container_name: agent-property
     expose:
       - "8001"
     env_file:
@@ -45,13 +46,13 @@ services:
     depends_on:
       pgvector:
         condition: service_healthy
-    command: ["uvicorn", "agent1-service-property-deals.main:app", "--host", "0.0.0.0", "--port", "8001"]
+    command: ["uvicorn", "agent1-service-property.main:app", "--host", "0.0.0.0", "--port", "8001"]
 
-  agent-people:
+  agent-hr:
     build:
       context: ..
       dockerfile: docker/app/Dockerfile
-    container_name: agent-people
+    container_name: agent-hr
     expose:
       - "8002"
     env_file:
@@ -62,13 +63,13 @@ services:
     depends_on:
       pgvector:
         condition: service_healthy
-    command: ["uvicorn", "agent2-service-people.main:app", "--host", "0.0.0.0", "--port", "8002"]
+    command: ["uvicorn", "agent2-service-hr.main:app", "--host", "0.0.0.0", "--port", "8002"]
 
-  agent-sales-payments:
+  agent-crm:
     build:
       context: ..
       dockerfile: docker/app/Dockerfile
-    container_name: agent-sales-payments
+    container_name: agent-crm
     expose:
       - "8003"
     env_file:
@@ -79,49 +80,24 @@ services:
     depends_on:
       pgvector:
         condition: service_healthy
-    command: ["uvicorn", "agent3-service-sales-payments.main:app", "--host", "0.0.0.0", "--port", "8003"]
+    command: ["uvicorn", "agent3-service-crm.main:app", "--host", "0.0.0.0", "--port", "8003"]
 
-  # ===================== Celery Worker =====================
-  # One worker consuming every service's queue, mirroring mini_rag's single
-  # celery-worker container consuming multiple queues.
-  celery-worker:
+  agent-sales-payments:
     build:
       context: ..
       dockerfile: docker/app/Dockerfile
-    container_name: celery-worker
+    container_name: agent-sales-payments
+    expose:
+      - "8004"
     env_file:
       - ./env/.env.app
     networks:
       - backend
     restart: always
     depends_on:
-      rabbitmq:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
       pgvector:
         condition: service_healthy
-    command: ["python", "-m", "celery", "-A", "celery_app", "worker",
-              "--queues=default,orchestrator_queue,property_deals_queue,people_queue,sales_payments_queue",
-              "--loglevel=info", "--pool=threads", "--concurrency=4"]
-
-  # ===================== Flower Dashboard =====================
-  flower:
-    build:
-      context: ..
-      dockerfile: docker/app/Dockerfile
-    container_name: flower
-    env_file:
-      - ./env/.env.app
-    ports:
-      - "5555:5555"
-    networks:
-      - backend
-    restart: always
-    depends_on:
-      - rabbitmq
-      - celery-worker
-    command: ["python", "-m", "celery", "-A", "celery_app", "flower", "--conf=flowerconfig.py"]
+    command: ["uvicorn", "agent4-service-sales-payments.main:app", "--host", "0.0.0.0", "--port", "8004"]
 
   # ===================== Nginx (routes to the orchestrator) =====================
   nginx:
@@ -225,27 +201,7 @@ services:
       - backend
     restart: always
 
-  # ===================== RabbitMQ (Celery broker) =====================
-  rabbitmq:
-    image: rabbitmq:4.1.2-management-alpine
-    container_name: rabbitmq
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
-    env_file:
-      - ./env/.env.rabbitmq
-    networks:
-      - backend
-    restart: always
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      timeout: 10s
-      retries: 5
-
-  # ===================== Redis (Celery result backend) =====================
+  # ===================== Redis (app-level session/vector-token state) =====================
   redis:
     image: redis:8.0.3-alpine
     container_name: redis
@@ -272,5 +228,4 @@ volumes:
   pgvector_data:
   prometheus_data:
   grafana_data:
-  rabbitmq_data:
   redis_data:

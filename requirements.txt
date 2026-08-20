@@ -28,22 +28,14 @@ arize-phoenix-evals==0.20.8
 asyncpg==0.30.0
 pgvector==0.3.6
 
+# SQL AST validation for db_execute (real parser instead of regex/token-scan)
+sqlglot==30.17.0
+
 # Operator UI
 streamlit==1.40.2
 
-# Task Queue and Background Processing (celery)
-celery==5.4.0
+# Redis (app-level session/vector-token state - see main/redis_client.py)
 redis==5.2.1
-
-### Celery needs this
-
-# Do the message between Celery and others like RabbitMQ (result backend is Redis)
-kombu==5.4.2
-# organize brokers
-billiard==4.2.1
-# call back for async calls
-vine==5.1.0
-flower==2.0.1
 
 # Monitoring and metrics
 prometheus-client==0.21.1

@@ -41,22 +41,14 @@ class ResetResponse(BaseModel):
     status: str
 
 
-class AsyncChatAccepted(BaseModel):
-    task_id: str
-    status: str
-
-
 def _split_into_chunks(text: str, size: int = 40):
     for i in range(0, len(text), size):
         yield text[i:i + size]
 
 
-def create_agent_app(config: AgentConfig, async_task=None, celery_app=None) -> FastAPI:
+def create_agent_app(config: AgentConfig) -> FastAPI:
     """
     Builds a sub-agent FastAPI app from `config`.
-
-    `async_task`/`celery_app`: when both are supplied, adds `/chat/async`
-    (queues the turn as a Celery task) and `/chat/status/{task_id}`.
     """
     app = FastAPI(
         title=config.title,
@@ -100,23 +92,6 @@ def create_agent_app(config: AgentConfig, async_task=None, celery_app=None) -> F
                 status_code=500,
                 detail=f"{config.error_label} Sub‑agent execution failed: {str(e)}"
             )
-
-    if async_task is not None and celery_app is not None:
-        from celery.result import AsyncResult
-
-        @app.post("/chat/async", response_model=AsyncChatAccepted)
-        async def chat_async(request: ChatRequest):
-            """Queue the chat turn as a Celery task instead of awaiting it inline."""
-            task = async_task.delay(request.session_id, request.user_input, request.context)
-            return AsyncChatAccepted(task_id=task.id, status="queued")
-
-        @app.get("/chat/status/{task_id}")
-        async def chat_status(task_id: str):
-            result = AsyncResult(task_id, app=celery_app)
-            payload: Dict[str, Any] = {"task_id": task_id, "status": result.status}
-            if result.ready():
-                payload["result"] = result.result if result.successful() else str(result.result)
-            return payload
 
     @app.post("/chat/stream")
     async def chat_stream(request: ChatRequest):
