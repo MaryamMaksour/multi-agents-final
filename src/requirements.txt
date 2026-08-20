@@ -1,0 +1,32 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.7.0
+python-dotenv==1.0.1
+
+# Orchestrator -> sub-agent calls
+httpx==0.28.1
+
+# Agent / LLM stack. langchain-openai speaks the OpenAI-compatible
+# protocol, which covers both the hosted API and a local vLLM server.
+langchain-core==0.3.28
+langchain-openai==0.2.14
+langgraph==0.2.60
+
+# Database (self-hosted Postgres/pgvector)
+asyncpg==0.30.0
+pgvector==0.3.6
+
+# SQL AST validation for execute_sql - a real parser, not a regex
+sqlglot==30.17.0
+
+# Redis (orchestrator conversation window)
+redis==5.2.1
+
+# Monitoring
+prometheus-client==0.21.1
+
+# Tests
+pytest==8.3.4
+pytest-asyncio==0.25.0
