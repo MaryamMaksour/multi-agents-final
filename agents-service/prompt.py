@@ -56,9 +56,10 @@ Rules:
 =============================================================
 AVAILABLE TOOLS (DOMAINS)
 =============================================================
-property_deals_TOOL — property inventory and the deals built on it: {domain[7]}
-people_TOOL — internal organization and external CRM: {domain[8]}
-sales_payments_TOOL — bookings and their payment lifecycle: {domain[9]}
+property_TOOL — property inventory: developers, projects, buildings, units: {domain[1]}
+hr_TOOL — internal organization: employees, heads of sales, directors, teams, agents, brokers: {domain[2]}
+crm_TOOL — external CRM: customers, customer deals, customer request trackers: {domain[3]}
+sales_payments_TOOL — bookings and their payment lifecycle: {domain[7]}
 
 All tools support:
 • lookup, filtering  

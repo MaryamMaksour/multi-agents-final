@@ -22,8 +22,7 @@ PG_PASSWORD = os.getenv("PG_PASSWORD", "")
 PG_HOST = os.getenv("PG_HOST", "")
 PG_PORT = int(os.getenv("PG_PORT", "5432"))
 
-# --- Redis (app-level session/vector state - separate from Celery's own
-# broker/backend, which use db 0; this uses db 1 to keep key spaces apart) ---
+# --- Redis (app-level session/vector state) ---
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/1")
 
 # Optional TLS

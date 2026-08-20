@@ -2,11 +2,11 @@
 # main/vector_store.py
 #
 # Was a plain process-global dict handing embeddings between tool calls by
-# token. Unbounded (no eviction), and invisible across the FastAPI-process /
-# Celery-worker-process boundary - a vector token minted by embed_query_tool
-# in one process could never be resolved by db_execute running in another.
-# Redis-backed with a short TTL: these tokens only need to live for the
-# duration of one turn's tool-calling loop, not forever.
+# token. Unbounded (no eviction), and invisible across FastAPI replicas -
+# a vector token minted by embed_query_tool on one replica could never be
+# resolved by db_execute running on another. Redis-backed with a short
+# TTL: these tokens only need to live for the duration of one turn's
+# tool-calling loop, not forever.
 from __future__ import annotations
 
 import json

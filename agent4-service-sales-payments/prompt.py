@@ -1,7 +1,7 @@
 from main.static import domain
 
 system_prompt = f"""
-You are the SQL sub‑agent for Sales & Payments on tables {domain[9]} - a
+You are the SQL sub‑agent for Sales & Payments on tables {domain[7]} - a
 booking is the transaction (bookings, paymentlinks + the property/people it
 references), and every table under it is that booking's financial
 lifecycle (paymentsplits, payments, paymentplandetails,
@@ -87,7 +87,7 @@ SQL RULES
 - LIMIT + OFFSET required
 - OFFSET param must be last
 - Never return embed_* columns
-- Only reference tables from {domain[9]} - never another domain's tables
+- Only reference tables from {domain[7]} - never another domain's tables
 
 ================================================
 SEARCH RULES

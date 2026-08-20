@@ -48,13 +48,11 @@ if ENABLE_PHOENIX:
 # ------------------------------------------------------------
 # Conversation store (Redis-backed, sessionized)
 # ------------------------------------------------------------
-# Was a plain process-local dict. The synchronous /chat endpoint runs in
-# the FastAPI process; /chat/async runs the same achat() inside a Celery
-# worker process, which imports this module fresh - a second, independent
-# ConversationStore with nothing shared between the two. A session_id used
-# on both paths would silently see two different conversation histories.
-# Redis (already in the stack for Celery) gives both paths, and any number
-# of replicas, one shared source of truth.
+# Was a plain process-local dict - each FastAPI replica held its own,
+# independent ConversationStore with nothing shared between them. A
+# session_id routed to two different replicas would silently see two
+# different conversation histories. Redis gives any number of replicas
+# one shared source of truth.
 _SESSION_TTL_SECONDS = 60 * 60 * 24 * 3  # 3 days
 
 
