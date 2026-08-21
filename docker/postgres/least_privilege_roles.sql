@@ -25,6 +25,53 @@ REVOKE ALL ON SCHEMA public FROM PUBLIC;
 GRANT USAGE ON SCHEMA public TO PUBLIC;
 
 -- ============================================================
+-- Two helpers, so this file can run on an empty database and be
+-- re-run on a populated one.
+--
+-- The business tables are loaded separately - a restore, a migration,
+-- an ETL job. On a fresh volume this script runs *first*, before any of
+-- them exist, and a GRANT naming a missing table aborts the whole
+-- init with ON_ERROR_STOP. That leaves the container refusing to start
+-- for a reason that has nothing to do with the roles themselves.
+--
+-- So: grant what exists, say plainly what is missing, and carry on. Run
+-- this file again after loading data and the remaining grants apply.
+-- ============================================================
+CREATE OR REPLACE FUNCTION ensure_role(role_name text, role_password text)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
+        RAISE NOTICE 'Role % already exists - leaving its password unchanged.', role_name;
+    ELSE
+        EXECUTE format('CREATE ROLE %I WITH LOGIN PASSWORD %L', role_name, role_password);
+    END IF;
+END
+$$;
+
+CREATE OR REPLACE FUNCTION grant_domain_tables(role_name text, tables text[])
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE
+    table_name text;
+    missing text[] := '{}';
+BEGIN
+    FOREACH table_name IN ARRAY tables
+    LOOP
+        IF to_regclass(quote_ident(table_name)) IS NULL THEN
+            missing := missing || table_name;
+        ELSE
+            EXECUTE format('GRANT SELECT ON TABLE %I TO %I', table_name, role_name);
+        END IF;
+    END LOOP;
+
+    IF array_length(missing, 1) > 0 THEN
+        RAISE WARNING
+            'Role % : these tables do not exist yet, so no SELECT was granted on them: %. '
+            'Load the data, then run this file again.', role_name, missing;
+    END IF;
+END
+$$;
+
+-- ============================================================
 -- History tables.
 --
 -- Created here rather than by the application, so that no agent role
@@ -70,11 +117,10 @@ $$;
 -- ============================================================
 -- HR agent -> the organization tables only.
 -- ============================================================
-CREATE ROLE app_hr WITH LOGIN PASSWORD 'CHANGE_ME_hr';
-
-GRANT SELECT ON TABLE
-    employees, directors_employees, hos_employee, teams, agents_employee
-TO app_hr;
+SELECT ensure_role('app_hr', 'CHANGE_ME_hr');
+SELECT grant_domain_tables('app_hr', ARRAY[
+    'employees', 'directors_employees', 'hos_employee', 'teams', 'agents_employee'
+]);
 
 GRANT SELECT, INSERT, UPDATE ON TABLE history_hr TO app_hr;
 GRANT USAGE, SELECT ON SEQUENCE history_hr_id_seq TO app_hr;
@@ -82,11 +128,10 @@ GRANT USAGE, SELECT ON SEQUENCE history_hr_id_seq TO app_hr;
 -- ============================================================
 -- CRM agent -> the customer tables only.
 -- ============================================================
-CREATE ROLE app_crm WITH LOGIN PASSWORD 'CHANGE_ME_crm';
-
-GRANT SELECT ON TABLE
-    customers, customerrequesttrackers, customers_deals
-TO app_crm;
+SELECT ensure_role('app_crm', 'CHANGE_ME_crm');
+SELECT grant_domain_tables('app_crm', ARRAY[
+    'customers', 'customerrequesttrackers', 'customers_deals'
+]);
 
 GRANT SELECT, INSERT, UPDATE ON TABLE history_crm TO app_crm;
 GRANT USAGE, SELECT ON SEQUENCE history_crm_id_seq TO app_crm;
@@ -99,7 +144,7 @@ GRANT USAGE, SELECT ON SEQUENCE history_crm_id_seq TO app_crm;
 -- no table allowlist of its own, which made every domain boundary below
 -- it optional.
 -- ============================================================
-CREATE ROLE app_orchestrator WITH LOGIN PASSWORD 'CHANGE_ME_orchestrator';
+SELECT ensure_role('app_orchestrator', 'CHANGE_ME_orchestrator');
 
 GRANT SELECT, INSERT, UPDATE ON TABLE history_orchestrator TO app_orchestrator;
 GRANT USAGE, SELECT ON SEQUENCE history_orchestrator_id_seq TO app_orchestrator;
