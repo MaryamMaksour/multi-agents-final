@@ -1,126 +1,107 @@
+# Compose for the src/ application.
+#
+# Two differences from the previous file are deliberate and both matter:
+#
+# 1. Per-service PG_USER/PG_PASSWORD. Every service used to share one
+#    env_file, and therefore one database user, which is why the roles in
+#    postgres/least_privilege_roles.sql were written but could never be
+#    applied. `environment:` merges over `env_file:`, so each agent now
+#    connects as its own role while sharing the rest of the config.
+#
+# 2. Nothing is published to the host except nginx. Postgres, Redis,
+#    Prometheus, Grafana and the exporters were all reachable from
+#    outside the machine before, and agents-service was published on
+#    8000, which let a caller skip nginx entirely. `expose:` keeps a port
+#    reachable inside the compose network and nowhere else.
+
+x-app: &app
+  build:
+    context: ..
+    dockerfile: docker/app/Dockerfile
+  env_file:
+    - ./env/.env.app
+  networks:
+    - backend
+  restart: always
+  depends_on:
+    pgvector:
+      condition: service_healthy
+  read_only: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+
 services:
 
-  # ===================== Orchestrator + Sub-agent FastAPI services =====================
-  # All 5 services share one image (docker/app/Dockerfile); only the uvicorn
-  # module path and port differ per service.
-  #
-  # Sub-agents are built with agent_common's factory (agent_common/factory.py)
-  # from a per-domain ProviderSpec (see each agentN-service-*/provider.py):
-  # property, hr, crm, and sales+payments (deals has no provider yet - see
-  # main/static.py's domain[1..3] and domain[7]).
-  #
-  # The orchestrator is the only service published to the host. Sub-agents
-  # use `expose:` (network-internal only) instead of `ports:` - nothing
-  # outside the compose network can reach a sub-agent directly and skip the
-  # orchestrator.
-
-  agents-service:
-    build:
-      context: ..
-      dockerfile: docker/app/Dockerfile
-    container_name: agents-service
-    ports:
-      - "8000:8000"
-    env_file:
-      - ./env/.env.app
-    networks:
-      - backend
-    restart: always
-    depends_on:
-      pgvector:
-        condition: service_healthy
-    command: ["uvicorn", "agents-service.main:app", "--host", "0.0.0.0", "--port", "8000"]
-
-  agent-property:
-    build:
-      context: ..
-      dockerfile: docker/app/Dockerfile
-    container_name: agent-property
+  # ===================== Orchestrator =====================
+  # Reaches data only by delegating. Its role needs no SELECT grant on
+  # any business table.
+  orchestrator:
+    <<: *app
+    container_name: orchestrator
     expose:
-      - "8001"
-    env_file:
-      - ./env/.env.app
-    networks:
-      - backend
-    restart: always
+      - "8000"
+    environment:
+      AGENT_ROLE: orchestrator
+      PG_USER: app_orchestrator
+      PG_PASSWORD: ${ORCHESTRATOR_PG_PASSWORD:?set ORCHESTRATOR_PG_PASSWORD}
+      SUB_AGENT_URLS: '["hr=http://agent-hr:8002","crm=http://agent-crm:8003"]'
     depends_on:
       pgvector:
         condition: service_healthy
-    command: ["uvicorn", "agent1-service-property.main:app", "--host", "0.0.0.0", "--port", "8001"]
+      redis:
+        condition: service_healthy
 
+  # ===================== Sub-agents =====================
   agent-hr:
-    build:
-      context: ..
-      dockerfile: docker/app/Dockerfile
+    <<: *app
     container_name: agent-hr
     expose:
       - "8002"
-    env_file:
-      - ./env/.env.app
-    networks:
-      - backend
-    restart: always
-    depends_on:
-      pgvector:
-        condition: service_healthy
-    command: ["uvicorn", "agent2-service-hr.main:app", "--host", "0.0.0.0", "--port", "8002"]
+    environment:
+      AGENT_ROLE: sub_agent
+      AGENT_DOMAIN: hr
+      PG_USER: app_hr
+      PG_PASSWORD: ${HR_PG_PASSWORD:?set HR_PG_PASSWORD}
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]
 
   agent-crm:
-    build:
-      context: ..
-      dockerfile: docker/app/Dockerfile
+    <<: *app
     container_name: agent-crm
     expose:
       - "8003"
-    env_file:
-      - ./env/.env.app
-    networks:
-      - backend
-    restart: always
-    depends_on:
-      pgvector:
-        condition: service_healthy
-    command: ["uvicorn", "agent3-service-crm.main:app", "--host", "0.0.0.0", "--port", "8003"]
+    environment:
+      AGENT_ROLE: sub_agent
+      AGENT_DOMAIN: crm
+      PG_USER: app_crm
+      PG_PASSWORD: ${CRM_PG_PASSWORD:?set CRM_PG_PASSWORD}
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"]
 
-  agent-sales-payments:
-    build:
-      context: ..
-      dockerfile: docker/app/Dockerfile
-    container_name: agent-sales-payments
-    expose:
-      - "8004"
-    env_file:
-      - ./env/.env.app
-    networks:
-      - backend
-    restart: always
-    depends_on:
-      pgvector:
-        condition: service_healthy
-    command: ["uvicorn", "agent4-service-sales-payments.main:app", "--host", "0.0.0.0", "--port", "8004"]
-
-  # ===================== Nginx (routes to the orchestrator) =====================
+  # ===================== Nginx =====================
+  # The only service published to the host.
   nginx:
     image: nginx:stable-alpine3.20-perl
     container_name: nginx
     ports:
       - "80:80"
     volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - agents-service
+      - orchestrator
     networks:
       - backend
     restart: always
 
-  # ===================== PostgreSQL (pgvector, self-hosted) =====================
+  # ===================== PostgreSQL (pgvector) =====================
   pgvector:
     image: pgvector/pgvector:0.8.0-pg17
     container_name: pgvector
-    ports:
-      - "5400:5432"
+    expose:
+      - "5432"
     volumes:
       - pgvector_data:/var/lib/postgresql/data
+      - ./postgres/least_privilege_roles.sql:/docker-entrypoint-initdb.d/10-roles.sql:ro
     env_file:
       - ./env/.env.postgres
     networks:
@@ -133,31 +114,49 @@ services:
       retries: 5
       start_period: 10s
 
-  # ===================== Prometheus Monitoring =====================
+  # ===================== Redis =====================
+  redis:
+    image: redis:8.0.3-alpine
+    container_name: redis
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 10s
+      retries: 5
+    # No default password: an unset variable must stop the container,
+    # not silently start one with a password that is public knowledge.
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}"]
+
+  # ===================== Monitoring =====================
+  # Bound to loopback: reachable from the host that runs the stack, not
+  # from the network. Put them behind an authenticating proxy before
+  # exposing them anywhere else.
   prometheus:
     image: prom/prometheus:v3.3.0
     container_name: prometheus
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - prometheus_data:/prometheus
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     networks:
       - backend
     restart: always
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--web.enable-lifecycle'
 
-  # ===================== Grafana Dashboard =====================
   grafana:
     image: grafana/grafana:11.6.0-ubuntu
     container_name: grafana
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
     env_file:
@@ -167,58 +166,6 @@ services:
     networks:
       - backend
     restart: always
-
-  # ===================== Node Exporter =====================
-  node-exporter:
-    image: prom/node-exporter:v1.9.1
-    container_name: node-exporter
-    ports:
-      - "9100:9100"
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.rootfs=/rootfs'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-    networks:
-      - backend
-    restart: always
-
-  # ===================== Postgres Exporter =====================
-  postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:v0.17.1
-    container_name: postgres-exporter
-    ports:
-      - "9187:9187"
-    env_file:
-      - ./env/.env.postgres-exporter
-    depends_on:
-      - pgvector
-    networks:
-      - backend
-    restart: always
-
-  # ===================== Redis (app-level session/vector-token state) =====================
-  redis:
-    image: redis:8.0.3-alpine
-    container_name: redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    env_file:
-      - ./env/.env.redis
-    networks:
-      - backend
-    restart: always
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      timeout: 10s
-      retries: 5
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-ChangeMe}"]
 
 networks:
   backend:
