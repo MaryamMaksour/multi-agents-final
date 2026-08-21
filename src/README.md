@@ -24,7 +24,7 @@ AGENT_ROLE=sub_agent AGENT_DOMAIN=crm    uvicorn main:app --port 8003
 
 ```bash
 cp src/.env.example src/.env      # then fill it in
-docker compose -f docker/docker-compose.v2.yml up --build
+docker compose -f docker/docker-compose.yml up --build
 pytest                            # 72 tests, no database or model needed
 ```
 
@@ -92,7 +92,7 @@ domains anywhere else to keep in sync.
 1. `stores/agents/specs/sales.py` — a `DomainSpec`
 2. add it to `AGENT_REGISTRY` in `specs/__init__.py`
 3. add its tables and search-type lists to `models/schema_data.py`
-4. add a role and its `GRANT`s in `docker/postgres/least_privilege_roles.v2.sql`
+4. add a role and its `GRANT`s in `docker/postgres/least_privilege_roles.sql`
 5. add a service and a `SUB_AGENT_URLS` entry in the compose file
 
 Steps 4 and 5 are the ones that actually widen data access — which is

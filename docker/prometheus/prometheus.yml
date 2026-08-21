@@ -3,40 +3,17 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-
-  - job_name: 'agents-service'
+  - job_name: orchestrator
+    metrics_path: /TjgR_87vhp_bs8KJ
     static_configs:
-      - targets: ['agents-service:8000']
-    metrics_path: '/TjgR_87vhp_bs8KJ'
+      - targets: ["orchestrator:8000"]
 
-  - job_name: 'agent-property'
+  - job_name: agent-hr
+    metrics_path: /TjgR_87vhp_bs8KJ
     static_configs:
-      - targets: ['agent-property:8001']
-    metrics_path: '/TjgR_87vhp_bs8KJ'
+      - targets: ["agent-hr:8002"]
 
-  - job_name: 'agent-hr'
+  - job_name: agent-crm
+    metrics_path: /TjgR_87vhp_bs8KJ
     static_configs:
-      - targets: ['agent-hr:8002']
-    metrics_path: '/TjgR_87vhp_bs8KJ'
-
-  - job_name: 'agent-crm'
-    static_configs:
-      - targets: ['agent-crm:8003']
-    metrics_path: '/TjgR_87vhp_bs8KJ'
-
-  - job_name: 'agent-sales-payments'
-    static_configs:
-      - targets: ['agent-sales-payments:8004']
-    metrics_path: '/TjgR_87vhp_bs8KJ'
-
-  - job_name: 'node-exporter'
-    static_configs:
-      - targets: ['node-exporter:9100']
-
-  - job_name: 'prometheus'
-    static_configs:
-      - targets: ['localhost:9090']
-
-  - job_name: 'postgres'
-    static_configs:
-      - targets: ['postgres-exporter:9187']
+      - targets: ["agent-crm:8003"]

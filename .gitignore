@@ -40,3 +40,6 @@ celerybeat.pid
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Docker compose secrets
+docker/.env

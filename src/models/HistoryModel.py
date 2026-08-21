@@ -124,7 +124,7 @@ class HistoryModel(BaseDataModel):
             except Exception:
                 # Under least privilege the agent role has no CREATE on
                 # the schema - the history tables are created up front by
-                # docker/postgres/least_privilege_roles.v2.sql instead, so
+                # docker/postgres/least_privilege_roles.sql instead, so
                 # that an agent can write its own history and nothing
                 # else. Missing CREATE is therefore expected; a missing
                 # table is not.

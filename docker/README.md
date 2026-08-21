@@ -1,108 +1,90 @@
-# Docker Setup for Multi-Agent App
+# Docker
 
-This directory contains the Docker setup for the multi-agent application: the
-orchestrator (`agents-service`) and its four domain sub-agents, plus the
-full observability stack.
-
-Each sub-agent is built from `agent_common`'s factory (`agent_common/factory.py`)
-out of a small per-domain `ProviderSpec` (see each `agentN-service-*/provider.py`).
+Runs the `src/` application: one orchestrator and one process per
+domain agent, on Postgres/pgvector and Redis, behind nginx.
 
 ## Services
 
-- **agents-service**: Orchestrator FastAPI app (port 8000, published to the host)
-- **agent-property**: Property inventory - developers, projects, buildings, units (port 8001, internal only)
-- **agent-hr**: Internal organization - employees, heads of sales, directors, teams, agents, brokers (port 8002, internal only)
-- **agent-crm**: External CRM - customers, customer deals, customer request trackers (port 8003, internal only)
-- **agent-sales-payments**: Bookings + payment lifecycle (port 8004, internal only)
+| service | port | |
+|---|---|---|
+| `nginx` | **80** (host) | the only thing published |
+| `orchestrator` | 8000 (internal) | talks to the user, delegates |
+| `agent-hr` | 8002 (internal) | employees, directors, teams, agents |
+| `agent-crm` | 8003 (internal) | customers, their deals and requests |
+| `pgvector` | 5432 (internal) | |
+| `redis` | 6379 (internal) | orchestrator conversation window |
+| `prometheus` | 9090 (**loopback**) | |
+| `grafana` | 3000 (**loopback**) | |
 
-Sub-agent ports use `expose:` rather than `ports:` - they're reachable from
-other containers on the compose network but not published to the host, so
-nothing outside the network can call a sub-agent directly and skip the
-orchestrator (and its own domain-scoped tool set).
+All three application containers are the same image. `AGENT_ROLE` and
+`AGENT_DOMAIN` in each service's `environment:` block decide what it
+serves, so adding an agent is a compose service plus a `SUB_AGENT_URLS`
+entry — not a new directory or a new image.
 
-- **Nginx**: Routes to the orchestrator (agents-service)
-- **PostgreSQL (pgvector)**: Self-hosted vector-enabled database
-- **Postgres-Exporter**: Exports PostgreSQL metrics for Prometheus
-- **Prometheus**: Metrics collection
-- **Grafana**: Visualization dashboard for metrics
-- **Node-Exporter**: System metrics collection
-- **Redis**: App-level session/vector-token state (see `main/redis_client.py`)
-
-## Setup Instructions
-
-### 1. Set up environment files
+## Running it
 
 ```bash
-cd docker/env
-cp .env.example.app .env.app
-cp .env.example.postgres .env.postgres
-cp .env.example.grafana .env.grafana
-cp .env.example.postgres-exporter .env.postgres-exporter
-cp .env.example.redis .env.redis
+cp docker/.env.example            docker/.env              # passwords
+cp docker/env/.env.example.app    docker/env/.env.app
+cp docker/env/.env.example.postgres docker/env/.env.postgres
+cp docker/env/.env.example.grafana  docker/env/.env.grafana
+
+docker compose -f docker/docker-compose.yml up --build
+curl localhost/api/v1/health
 ```
 
-Make sure the Postgres/Redis credentials in `.env.app` match the values in
-`.env.postgres` and `.env.redis` respectively.
+Nothing has a default password. A missing value in `docker/.env` stops
+the stack, which is the intended behaviour.
 
-### 2. Start the services
+## Database roles
 
-```bash
-cd docker
-docker compose up --build -d
-```
+`postgres/least_privilege_roles.sql` is mounted into the pgvector
+container's `docker-entrypoint-initdb.d`, so it runs once when the data
+volume is first created. On an existing database, run it by hand as a
+superuser.
 
-To start only specific services:
+It creates one role per agent:
 
-```bash
-docker compose up -d agents-service nginx pgvector
-```
+- `app_hr` — SELECT on the five organization tables, and its own history
+- `app_crm` — SELECT on the three customer tables, and its own history
+- `app_orchestrator` — its own history only; it reaches data by
+  delegating, never by querying
 
-If you encounter connection issues, start the infra services first and let
-them initialize before starting the application:
+This is what makes the application-layer SQL validation survivable.
+`src/stores/agents/tools/sql_validation.py` parses every query and
+rejects tables outside the agent's domain, but it is still application
+code. A role that physically cannot see another domain's tables turns a
+bug there into an error message.
 
-```bash
-# Start infra first
-docker compose up -d pgvector redis postgres-exporter
-# Wait for them to be healthy
-sleep 30
-# Start the application services
-docker compose up --build -d agents-service agent-property agent-hr agent-crm agent-sales-payments nginx prometheus grafana node-exporter
-```
+Two grants are deliberately absent:
 
-To tear everything down (including volumes):
+- **No `CREATE`.** The history tables are created by this script, so an
+  agent can write its own history and nothing else.
+- **No `DELETE`.** An agent that can delete its own history has no audit
+  trail. Retention runs separately, under a different role.
 
-```bash
-docker compose down -v --remove-orphans
-```
+Change the passwords in this file *and* in `docker/.env` together — the
+values must agree.
 
-### 3. Access the services
+## Network exposure
 
-- Orchestrator API: http://localhost:8000 (docs at /docs)
-- Nginx (serving the orchestrator): http://localhost
-- Sub-agents: internal only (not published to the host) - reach them via `docker compose exec` or from inside the network for debugging
-- Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000
+Only nginx is published. Postgres, Redis and both application tiers use
+`expose:`, which is reachable inside the compose network and nowhere
+else; Prometheus and Grafana are bound to `127.0.0.1`, so they are
+reachable from the host that runs the stack but not from the network.
 
-## SQL safety
+Before this stack faces anything real:
 
-`db_execute` (the tool each sub-agent uses to run LLM-authored SQL) is
-validated with `agent_common/sql_validation.py` - a real SQL parser
-(sqlglot), not regex: single SELECT/WITH/UNION statement only, no
-`embed_*`/`embedding` columns anywhere in the query, no tables outside
-the calling agent's domain, no filesystem/administrative function calls.
+- **Terminate TLS at nginx** (it listens on plain 80 today) and set
+  `PG_SSL=true`.
+- **Authenticate.** `/api/v1/chat` is open. nginx clears `X-Principal`
+  from incoming requests, so a client cannot claim an identity, but
+  nothing sets a verified one yet.
+- **Put Grafana behind an authenticating proxy** if it needs to be
+  reachable beyond the host.
 
-That's still an application-layer check. `docker/postgres/least_privilege_roles.sql`
-adds the DB-layer backstop: one Postgres role per domain, `SELECT`-only on
-that domain's own tables, so a bug in the app-layer check still can't
-reach another domain's data. Run it once against the live database, then
-see the wiring notes at the bottom of that file for pointing each
-service's `PG_USER`/`PG_PASSWORD` at its own role in `docker-compose.yml`.
+## Containers
 
-## Monitoring
-
-Each FastAPI service exposes Prometheus metrics at `/TjgR_87vhp_bs8KJ`
-(intentionally not `/metrics`, to avoid casual public discovery). Prometheus
-scrapes all 5 services plus node-exporter and postgres-exporter automatically.
-
-Log into Grafana at http://localhost:3000 (default admin/admin) and add
-Prometheus (http://prometheus:9090) as a data source.
+Non-root, read-only root filesystem, all capabilities dropped,
+`no-new-privileges`. Pin image digests before deploying anywhere that
+matters.
